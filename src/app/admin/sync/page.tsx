@@ -1,6 +1,7 @@
 import { desc } from 'drizzle-orm'
 import { db } from '@/db'
 import { syncRuns } from '@/db/schema'
+import { isPresumedInterrupted } from '@/lib/frazer/sync-run-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,18 +22,33 @@ const STATUS_STYLES: Record<string, string> = {
   aborted: 'bg-amber-100 text-amber-800 border border-amber-300',
   failed: 'bg-red-100 text-red-800 border border-red-300',
   running: 'bg-blue-100 text-blue-800 border border-blue-300',
+  // A running row presumed killed by a hard timeout, not genuinely in
+  // flight. Distinct color from 'running' so it doesn't read as live.
+  interrupted: 'bg-gray-200 text-gray-700 border border-gray-400',
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? 'bg-gray-100 text-gray-800 border border-gray-300'
+function StatusBadge({ status, interrupted }: { status: string; interrupted: boolean }) {
+  const label = interrupted ? 'interrupted' : status
+  const style = STATUS_STYLES[label] ?? 'bg-gray-100 text-gray-800 border border-gray-300'
   return (
     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${style}`}>
-      {status}
+      {label}
     </span>
   )
 }
 
-function NotesCell({ abortReason, errors }: { abortReason: string | null; errors: string[] }) {
+function NotesCell({
+  abortReason, errors, interrupted,
+}: { abortReason: string | null; errors: string[]; interrupted: boolean }) {
+  if (interrupted) {
+    return (
+      <div className="max-w-md text-xs text-gray-600">
+        This run was killed before it could report — presumed interrupted by
+        the function timeout, not a genuine failure. Any progress made
+        before the kill was already committed.
+      </div>
+    )
+  }
   if (!abortReason && errors.length === 0) {
     return <span className="text-gray-400">—</span>
   }
@@ -92,24 +108,27 @@ export default async function AdminSyncPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {runs.map((run) => (
-                <tr key={run.id}>
-                  <td className="whitespace-nowrap px-3 py-2 text-gray-700">
-                    {formatTimestamp(run.startedAt)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <StatusBadge status={run.status} />
-                  </td>
-                  <td className="px-3 py-2 text-right text-gray-700">{run.vehiclesSeen}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{run.created}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{run.updated}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{run.markedSold}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{run.photosProcessed}</td>
-                  <td className="px-3 py-2">
-                    <NotesCell abortReason={run.abortReason} errors={run.errors} />
-                  </td>
-                </tr>
-              ))}
+              {runs.map((run) => {
+                const interrupted = isPresumedInterrupted(run)
+                return (
+                  <tr key={run.id}>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                      {formatTimestamp(run.startedAt)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <StatusBadge status={run.status} interrupted={interrupted} />
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-700">{run.vehiclesSeen}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{run.created}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{run.updated}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{run.markedSold}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{run.photosProcessed}</td>
+                    <td className="px-3 py-2">
+                      <NotesCell abortReason={run.abortReason} errors={run.errors} interrupted={interrupted} />
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
