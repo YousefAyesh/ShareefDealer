@@ -157,6 +157,12 @@ export default {
 
 - [ ] **Step 2: Create `src/db/schema.ts`**
 
+Three conventions applied throughout, each for a reason:
+
+- **`.$type<'a' | 'b'>()` on every enum-ish text column.** The allowed values must be enforced by the compiler, not by a comment — thirteen later tasks read this file to learn them. Deliberately *not* `pgEnum`: adding a status later would mean an `ALTER TYPE` migration.
+- **`{ withTimezone: true }` on every timestamp.** These all record an instant that happened. Bare `timestamp` is `timestamp without time zone`, a naive number with no offset; the server runs UTC and the dealer reads these in US local time.
+- **Array-return index callback.** `drizzle-orm@0.45.2` marks the object-return form deprecated.
+
 ```typescript
 import {
   pgTable, text, integer, timestamp, boolean, jsonb, uuid, uniqueIndex, index,
@@ -167,7 +173,7 @@ export const vehicles = pgTable('vehicles', {
 
   // Identity. sourceKey is what we matched on; see reconcile-plan.ts.
   sourceKey: text('source_key').notNull(),
-  sourceKeyType: text('source_key_type').notNull(), // 'vin' | 'stock'
+  sourceKeyType: text('source_key_type').$type<'vin' | 'stock'>().notNull(),
   vin: text('vin'),
   stockNumber: text('stock_number'),
   slug: text('slug').notNull(),
@@ -193,22 +199,22 @@ export const vehicles = pgTable('vehicles', {
   description: text('description'),
   features: jsonb('features').$type<string[]>().notNull().default([]),
 
-  status: text('status').notNull().default('available'), // 'available' | 'sold' | 'hidden'
+  status: text('status').$type<'available' | 'sold' | 'hidden'>().notNull().default('available'),
   priceReduced: boolean('price_reduced').notNull().default(false),
 
   sourceHash: text('source_hash').notNull(),
   vinDecoded: jsonb('vin_decoded').$type<Record<string, string>>(),
 
-  firstSeenAt: timestamp('first_seen_at').notNull().defaultNow(),
-  lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),
-  soldAt: timestamp('sold_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-}, (t) => ({
-  sourceKeyIdx: uniqueIndex('vehicles_source_key_idx').on(t.sourceKey),
-  slugIdx: uniqueIndex('vehicles_slug_idx').on(t.slug),
-  statusIdx: index('vehicles_status_idx').on(t.status),
-}))
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  soldAt: timestamp('sold_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('vehicles_source_key_idx').on(t.sourceKey),
+  uniqueIndex('vehicles_slug_idx').on(t.slug),
+  index('vehicles_status_idx').on(t.status),
+])
 
 export const vehiclePhotos = pgTable('vehicle_photos', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -221,17 +227,17 @@ export const vehiclePhotos = pgTable('vehicle_photos', {
   width: integer('width').notNull(),
   height: integer('height').notNull(),
   alt: text('alt').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (t) => ({
-  vehicleHashIdx: uniqueIndex('vehicle_photos_vehicle_hash_idx').on(t.vehicleId, t.contentHash),
-}))
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('vehicle_photos_vehicle_hash_idx').on(t.vehicleId, t.contentHash),
+])
 
 export const syncRuns = pgTable('sync_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
-  source: text('source').notNull(),  // 'xml_feed' | 'sftp' | 'manual'
-  status: text('status').notNull(),  // 'running' | 'success' | 'aborted' | 'failed'
-  startedAt: timestamp('started_at').notNull().defaultNow(),
-  finishedAt: timestamp('finished_at'),
+  source: text('source').$type<'xml_feed' | 'sftp' | 'manual'>().notNull(),
+  status: text('status').$type<'running' | 'success' | 'aborted' | 'failed'>().notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
   vehiclesSeen: integer('vehicles_seen').notNull().default(0),
   created: integer('created').notNull().default(0),
   updated: integer('updated').notNull().default(0),
@@ -253,26 +259,41 @@ export const leads = pgTable('leads', {
   utm: jsonb('utm').$type<Record<string, string>>(),
   ip: text('ip'),
   userAgent: text('user_agent'),
-  status: text('status').notNull().default('new'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  status: text('status').$type<'new' | 'contacted' | 'closed'>().notNull().default('new'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const adminUsers = pgTable('admin_users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 ```
 
 - [ ] **Step 3: Create `src/db/index.ts`**
+
+Three things this file must get right, all serverless concerns:
+
+- **`max: 1`.** A Vercel lambda serves one request at a time, so a pool of 10 (the postgres.js default) only consumes slots a pooler then has to serve.
+- **`prepare: false`.** Required for transaction-mode poolers such as PgBouncer.
+- **A `globalThis` cache in development only.** Next.js Fast Refresh re-evaluates this module on every save, and nearly everything imports it — without the guard, local iteration leaks a connection pool per save until Postgres refuses new clients.
 
 ```typescript
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema'
 
-const client = postgres(process.env.DATABASE_URL!, { prepare: false })
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) throw new Error('DATABASE_URL is not set')
+
+const globalForDb = globalThis as unknown as {
+  client: ReturnType<typeof postgres> | undefined
+}
+
+const client = globalForDb.client ?? postgres(connectionString, { prepare: false, max: 1 })
+if (process.env.NODE_ENV !== 'production') globalForDb.client = client
+
 export const db = drizzle(client, { schema })
 ```
 

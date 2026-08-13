@@ -7,7 +7,7 @@ export const vehicles = pgTable('vehicles', {
 
   // Identity. sourceKey is what we matched on; see reconcile-plan.ts.
   sourceKey: text('source_key').notNull(),
-  sourceKeyType: text('source_key_type').notNull(), // 'vin' | 'stock'
+  sourceKeyType: text('source_key_type').$type<'vin' | 'stock'>().notNull(),
   vin: text('vin'),
   stockNumber: text('stock_number'),
   slug: text('slug').notNull(),
@@ -33,17 +33,17 @@ export const vehicles = pgTable('vehicles', {
   description: text('description'),
   features: jsonb('features').$type<string[]>().notNull().default([]),
 
-  status: text('status').notNull().default('available'), // 'available' | 'sold' | 'hidden'
+  status: text('status').$type<'available' | 'sold' | 'hidden'>().notNull().default('available'),
   priceReduced: boolean('price_reduced').notNull().default(false),
 
   sourceHash: text('source_hash').notNull(),
   vinDecoded: jsonb('vin_decoded').$type<Record<string, string>>(),
 
-  firstSeenAt: timestamp('first_seen_at').notNull().defaultNow(),
-  lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),
-  soldAt: timestamp('sold_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  soldAt: timestamp('sold_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('vehicles_source_key_idx').on(t.sourceKey),
   uniqueIndex('vehicles_slug_idx').on(t.slug),
@@ -61,17 +61,17 @@ export const vehiclePhotos = pgTable('vehicle_photos', {
   width: integer('width').notNull(),
   height: integer('height').notNull(),
   alt: text('alt').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('vehicle_photos_vehicle_hash_idx').on(t.vehicleId, t.contentHash),
 ])
 
 export const syncRuns = pgTable('sync_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
-  source: text('source').notNull(),  // 'xml_feed' | 'sftp' | 'manual'
-  status: text('status').notNull(),  // 'running' | 'success' | 'aborted' | 'failed'
-  startedAt: timestamp('started_at').notNull().defaultNow(),
-  finishedAt: timestamp('finished_at'),
+  source: text('source').$type<'xml_feed' | 'sftp' | 'manual'>().notNull(),
+  status: text('status').$type<'running' | 'success' | 'aborted' | 'failed'>().notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
   vehiclesSeen: integer('vehicles_seen').notNull().default(0),
   created: integer('created').notNull().default(0),
   updated: integer('updated').notNull().default(0),
@@ -93,13 +93,13 @@ export const leads = pgTable('leads', {
   utm: jsonb('utm').$type<Record<string, string>>(),
   ip: text('ip'),
   userAgent: text('user_agent'),
-  status: text('status').notNull().default('new'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  status: text('status').$type<'new' | 'contacted' | 'closed'>().notNull().default('new'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const adminUsers = pgTable('admin_users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })

@@ -2,7 +2,7 @@ CREATE TABLE "admin_users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email" text NOT NULL,
 	"password_hash" text NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "admin_users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
@@ -18,15 +18,15 @@ CREATE TABLE "leads" (
 	"ip" text,
 	"user_agent" text,
 	"status" text DEFAULT 'new' NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sync_runs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"source" text NOT NULL,
 	"status" text NOT NULL,
-	"started_at" timestamp DEFAULT now() NOT NULL,
-	"finished_at" timestamp,
+	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"finished_at" timestamp with time zone,
 	"vehicles_seen" integer DEFAULT 0 NOT NULL,
 	"created" integer DEFAULT 0 NOT NULL,
 	"updated" integer DEFAULT 0 NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE "vehicle_photos" (
 	"width" integer NOT NULL,
 	"height" integer NOT NULL,
 	"alt" text NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "vehicles" (
@@ -80,11 +80,11 @@ CREATE TABLE "vehicles" (
 	"price_reduced" boolean DEFAULT false NOT NULL,
 	"source_hash" text NOT NULL,
 	"vin_decoded" jsonb,
-	"first_seen_at" timestamp DEFAULT now() NOT NULL,
-	"last_seen_at" timestamp DEFAULT now() NOT NULL,
-	"sold_at" timestamp,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"sold_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "leads" ADD CONSTRAINT "leads_vehicle_id_vehicles_id_fk" FOREIGN KEY ("vehicle_id") REFERENCES "public"."vehicles"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
