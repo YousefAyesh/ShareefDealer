@@ -162,7 +162,7 @@ export async function runSyncAndRecord(source: 'xml_feed' | 'manual'): Promise<S
   } catch (err) {
     result = {
       status: 'failed', vehiclesSeen: 0, created: 0, updated: 0, markedSold: 0,
-      photosProcessed: 0, abortReason: null,
+      photosProcessed: 0, photosDeferred: 0, abortReason: null,
       errors: [`Unhandled: ${(err as Error).message}`], rawSnapshot: null,
     }
   }
@@ -175,6 +175,7 @@ export async function runSyncAndRecord(source: 'xml_feed' | 'manual'): Promise<S
     updated: result.updated,
     markedSold: result.markedSold,
     photosProcessed: result.photosProcessed,
+    photosDeferred: result.photosDeferred,
     abortReason: result.abortReason,
     errors: result.errors,
   }).where(eq(syncRuns.id, run.id))

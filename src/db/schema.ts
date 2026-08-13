@@ -37,7 +37,10 @@ export const vehicles = pgTable('vehicles', {
   priceReduced: boolean('price_reduced').notNull().default(false),
 
   sourceHash: text('source_hash').notNull(),
-  vinDecoded: jsonb('vin_decoded').$type<Record<string, string>>(),
+  // Raw vPIC response. Record<string, unknown>, not <string, string> --
+  // vPIC returns mixed types (e.g. numeric `year`), and the old <string,
+  // string> type was a lie that reconcile-apply.ts suppressed with a cast.
+  vinDecoded: jsonb('vin_decoded').$type<Record<string, unknown>>(),
 
   firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
@@ -78,6 +81,7 @@ export const syncRuns = pgTable('sync_runs', {
   updated: integer('updated').notNull().default(0),
   markedSold: integer('marked_sold').notNull().default(0),
   photosProcessed: integer('photos_processed').notNull().default(0),
+  photosDeferred: integer('photos_deferred').notNull().default(0),
   abortReason: text('abort_reason'),
   rawSnapshotRef: text('raw_snapshot_ref'),
   errors: jsonb('errors').$type<string[]>().notNull().default([]),

@@ -1,9 +1,50 @@
 import { checkFeedSanity } from './guards'
 import { normalizeVehicle } from './normalize'
 import { planReconciliation, type ExistingVehicle } from './reconcile-plan'
+import { buildSlug } from '@/lib/slug'
 import type { CanonicalVehicle, FeedAdapter } from './types'
 import type { ReconcileCounts } from './reconcile-apply'
 import type { ReconcilePlan } from './reconcile-plan'
+
+/**
+ * Frazer permits duplicate VINs in the feed (a mis-scanned or reused VIN),
+ * but each row can still be a distinct physical car with its own stock
+ * number. Per spec §6.1, identity is VIN when present AND unique in the
+ * feed; when a VIN repeats, every row sharing it that has a usable stock
+ * number falls back to being keyed on that stock number instead, so both
+ * cars survive under distinct identities rather than one silently vanishing
+ * as a "duplicate". A row sharing the VIN with NO stock number has no
+ * alternative identity available and is left as-is — planReconciliation
+ * will drop all but the first row per source key and report the rest in
+ * `duplicateKeys`.
+ *
+ * `sourceHash` is deliberately left untouched by re-keying: it fingerprints
+ * feed content, and which identity we chose to key on is our decision, not
+ * something the feed did. The `slug` DOES need to be rebuilt, since it's
+ * derived from `sourceKey`.
+ */
+export function resolveDuplicateVins(canonical: CanonicalVehicle[]): CanonicalVehicle[] {
+  const vinCounts = new Map<string, number>()
+  for (const v of canonical) {
+    if (v.sourceKeyType !== 'vin') continue
+    vinCounts.set(v.sourceKey, (vinCounts.get(v.sourceKey) ?? 0) + 1)
+  }
+
+  return canonical.map((v) => {
+    if (v.sourceKeyType !== 'vin') return v
+    if ((vinCounts.get(v.sourceKey) ?? 0) <= 1) return v
+    if (!v.stockNumber) return v // no usable alternative identity; left for the planner to drop
+
+    return {
+      ...v,
+      sourceKey: v.stockNumber,
+      sourceKeyType: 'stock',
+      slug: buildSlug({
+        year: v.year, make: v.make, model: v.model, trim: v.trim, sourceKey: v.stockNumber,
+      }),
+    }
+  })
+}
 
 /**
  * What the orchestrator needs from a stored row: the planner's projection,
@@ -36,6 +77,10 @@ export type SyncResult = {
   updated: number
   markedSold: number
   photosProcessed: number
+  /** Vehicles whose photo work was skipped this run because the photo
+   *  budget was exhausted. See PHOTO_BUDGET_PER_RUN. Not a failure -- these
+   *  are picked up automatically next run via the changed-or-incomplete gate. */
+  photosDeferred: number
   abortReason: string | null
   errors: string[]
   rawSnapshot: string | null
@@ -44,10 +89,25 @@ export type SyncResult = {
 function emptyResult(): SyncResult {
   return {
     status: 'failed', vehiclesSeen: 0, created: 0, updated: 0,
-    markedSold: 0, photosProcessed: 0, abortReason: null,
+    markedSold: 0, photosProcessed: 0, photosDeferred: 0, abortReason: null,
     errors: [], rawSnapshot: null,
   }
 }
+
+/**
+ * Ceiling on photos processed (downloaded, EXIF-corrected, resized to 3
+ * variants, WebP-encoded, uploaded) in a single invocation.
+ *
+ * maxDuration is 300s. Serial photo work runs roughly 1.5s/photo (download
+ * + processing + blob upload), so 40 photos costs ~60s, leaving ~240s of
+ * headroom for the feed fetch, VIN decode calls, and the reconciliation
+ * transaction -- comfortable margin against a hard kill. An initial
+ * backfill of ~300 vehicles x ~10 photos exceeds this many times over in a
+ * single run; the excess is deferred to subsequent runs rather than
+ * chasing a serial pipeline that would otherwise run ~75 minutes and get
+ * killed mid-transaction. See FIX 4 in the review notes.
+ */
+export const PHOTO_BUDGET_PER_RUN = 40
 
 export async function runSyncCore(deps: SyncDeps): Promise<SyncResult> {
   const result = emptyResult()
@@ -73,20 +133,37 @@ export async function runSyncCore(deps: SyncDeps): Promise<SyncResult> {
   }
 
   // 2. Normalize. A bad row is skipped, not fatal.
-  const canonical: CanonicalVehicle[] = []
+  const normalized: CanonicalVehicle[] = []
   for (const [i, rawVehicle] of parsed.entries()) {
-    const normalized = normalizeVehicle(rawVehicle)
-    if (!normalized) {
+    const n = normalizeVehicle(rawVehicle)
+    if (!n) {
       result.errors.push(`Row ${i}: skipped — no VIN and no stock number`)
       continue
     }
-    canonical.push(normalized)
+    normalized.push(n)
   }
+
+  // 2b. Re-key vehicles that share a VIN with another row onto their stock
+  //     number, per spec §6.1 (VIN is identity only when unique in the
+  //     feed). Must run before the guard and the planner, both of which key
+  //     off sourceKey. See resolveDuplicateVins for the full rationale.
+  const canonical = resolveDuplicateVins(normalized)
 
   // 3. Safety guards. Aborting here leaves the database completely untouched —
   //    note this runs BEFORE loadExisting, so an abort reads nothing at all.
+  //
+  //    incomingCount MUST be the count of DISTINCT source keys, not
+  //    canonical.length. lastGoodCount reads syncRuns.vehiclesSeen from the
+  //    last successful run, which is computed AFTER duplicate removal (see
+  //    step 6 below). Comparing a raw, duplicate-inflated row count against
+  //    a deduped baseline understates shrink — duplicates can never make
+  //    the apparent count look smaller, only bigger — so a real collapse
+  //    (100 -> 55 vehicles) hidden behind a feed glitch that lists survivors
+  //    twice (~110 raw rows) would sail through the guard it exists to be
+  //    caught by. Keep both sides of this comparison in the same unit.
+  const uniqueIncoming = new Set(canonical.map((v) => v.sourceKey)).size
   const guard = checkFeedSanity({
-    incomingCount: canonical.length,
+    incomingCount: uniqueIncoming,
     lastGoodCount: await deps.lastGoodCount(),
   })
   if (!guard.ok) {
@@ -176,16 +253,35 @@ export async function runSyncCore(deps: SyncDeps): Promise<SyncResult> {
     }
   }
 
-  // A failure for one vehicle never fails the run.
+  // A failure for one vehicle never fails the run. Once PHOTO_BUDGET_PER_RUN
+  // is reached, remaining vehicles are deferred rather than started -- this
+  // is what keeps a large backfill from running serially for over an hour
+  // and getting hard-killed mid-invocation. See PHOTO_BUDGET_PER_RUN above.
+  let budgetExhausted = false
   for (const v of canonical) {
     if (!needsPhotoSync.has(v.sourceKey)) continue
+    if (budgetExhausted) {
+      result.photosDeferred++
+      continue
+    }
     try {
       result.photosProcessed += await deps.syncPhotos(v.sourceKey, v.photoUrls)
     } catch (err) {
       result.errors.push(`Photo sync failed for ${v.sourceKey}: ${(err as Error).message}`)
     }
+    if (result.photosProcessed >= PHOTO_BUDGET_PER_RUN) {
+      budgetExhausted = true
+    }
   }
 
+  if (result.photosDeferred > 0) {
+    result.errors.push(
+      `Photo budget reached; ${result.photosDeferred} vehicles deferred to the next run`,
+    )
+  }
+
+  // Deferral is normal operation during backfill, not a failure -- the run
+  // still completes successfully even when photo work was capped.
   result.status = 'success'
   return result
 }

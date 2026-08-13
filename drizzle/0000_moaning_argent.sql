@@ -32,6 +32,7 @@ CREATE TABLE "sync_runs" (
 	"updated" integer DEFAULT 0 NOT NULL,
 	"marked_sold" integer DEFAULT 0 NOT NULL,
 	"photos_processed" integer DEFAULT 0 NOT NULL,
+	"photos_deferred" integer DEFAULT 0 NOT NULL,
 	"abort_reason" text,
 	"raw_snapshot_ref" text,
 	"errors" jsonb DEFAULT '[]'::jsonb NOT NULL

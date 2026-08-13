@@ -1,5 +1,5 @@
 {
-  "id": "eb9d4dd6-e9e0-4bda-bdf4-3d3cdb503c32",
+  "id": "6ce43cea-303a-4388-a4d2-5dc7f242c416",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -219,6 +219,13 @@
         },
         "photos_processed": {
           "name": "photos_processed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "photos_deferred": {
+          "name": "photos_deferred",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

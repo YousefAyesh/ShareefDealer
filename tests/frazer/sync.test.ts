@@ -1,9 +1,22 @@
 import { describe, it, expect, vi } from 'vitest'
-import { runSyncCore } from '@/lib/frazer/sync'
+import { runSyncCore, resolveDuplicateVins } from '@/lib/frazer/sync'
 import { xmlAdapter } from '@/lib/frazer/xml-adapter'
 import { normalizeVehicle } from '@/lib/frazer/normalize'
+import type { CanonicalVehicle } from '@/lib/frazer/types'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+
+function canonicalVehicle(over: Partial<CanonicalVehicle> = {}): CanonicalVehicle {
+  return {
+    sourceKey: 'VIN1', sourceKeyType: 'vin', vin: 'VIN1', stockNumber: 'A1',
+    slug: 'car-vin1', year: 2019, make: 'Honda', model: 'Civic', trim: 'LX',
+    bodyStyle: null, drivetrain: null, transmission: null, engine: null,
+    fuelType: null, doors: null, exteriorColor: null, interiorColor: null,
+    mileage: 60000, priceCents: 1699500, downPaymentCents: null,
+    weeklyPaymentCents: null, description: null, features: [], photoUrls: [],
+    sourceHash: 'hash-a', ...over,
+  }
+}
 
 const fixture = (name: string) =>
   readFileSync(join(__dirname, '../fixtures/frazer', name), 'utf-8')
@@ -70,6 +83,21 @@ describe('runSyncCore', () => {
     expect(d.applyPlan).not.toHaveBeenCalled()
   })
 
+  it('aborts on a catastrophic shrink even when every row in the feed is duplicated — the guard must compare deduped counts, not raw row counts', async () => {
+    // duplicated.xml lists 3 distinct VINs, each repeated twice (6 raw rows).
+    // Real (deduped) shrink from a lastGoodCount of 5 is (5-3)/5 = 40%, at
+    // the abort threshold. Comparing against the raw row count of 6 instead
+    // would look like growth and wrongly let this through.
+    const d = deps({
+      fetchFeed: vi.fn().mockResolvedValue(fixture('duplicated.xml')),
+      lastGoodCount: vi.fn().mockResolvedValue(5),
+    })
+    const result = await runSyncCore(d)
+    expect(result.status).toBe('aborted')
+    expect(result.abortReason).toMatch(/shrank/i)
+    expect(d.applyPlan).not.toHaveBeenCalled()
+  })
+
   it('does not read the database before the guards pass', async () => {
     const d = deps({ fetchFeed: vi.fn().mockResolvedValue(fixture('empty.xml')) })
     await runSyncCore(d)
@@ -91,13 +119,18 @@ describe('runSyncCore', () => {
     expect(d.applyPlan).not.toHaveBeenCalled()
   })
 
-  it('skips unusable rows and completes the run', async () => {
+  it('resolves a duplicate VIN via stock number so all rows with a usable identity survive', async () => {
     const d = deps({ fetchFeed: vi.fn().mockResolvedValue(fixture('dirty.xml')) })
     const result = await runSyncCore(d)
     expect(result.status).toBe('success')
-    // dirty.xml has 3 rows; two share a VIN, so one is dropped as a duplicate
-    expect(result.vehiclesSeen).toBe(2)
-    expect(result.errors.some((e) => /duplicate/i.test(e))).toBe(true)
+    // dirty.xml has 3 rows: one with no VIN (falls back to stock number
+    // W-77), and two sharing VIN 3N1AB7AP0FY123456 but with distinct stock
+    // numbers A1050/A1051. resolveDuplicateVins re-keys the latter two onto
+    // their stock numbers, so all three have a usable, distinct identity —
+    // none is dropped as a duplicate.
+    expect(result.vehiclesSeen).toBe(3)
+    expect(result.created).toBe(3)
+    expect(result.errors.some((e) => /duplicate/i.test(e))).toBe(false)
   })
 
   it('continues the run when photo syncing throws for one vehicle', async () => {
@@ -173,5 +206,94 @@ describe('runSyncCore', () => {
     await runSyncCore(d)
     expect(d.syncPhotos).toHaveBeenCalledTimes(1)
     expect(d.syncPhotos).toHaveBeenCalledWith(incomplete.sourceKey, expect.any(Array))
+  })
+
+  it('stops processing photos once the per-run budget is exhausted and reports how many vehicles were deferred', async () => {
+    // normal.xml has 3 vehicles, all new (need photo sync). Each syncPhotos
+    // call "processes" 20 photos, so vehicle 1 brings the running total to
+    // 20 (under the 40 budget, keep going), vehicle 2 brings it to 40 (at
+    // the budget, stop), and vehicle 3 must be deferred rather than synced.
+    const d = deps({ syncPhotos: vi.fn().mockResolvedValue(20) })
+    const result = await runSyncCore(d)
+    expect(result.status).toBe('success')
+    expect(d.syncPhotos).toHaveBeenCalledTimes(2)
+    expect(result.photosDeferred).toBe(1)
+    expect(result.errors.some((e) => /budget/i.test(e) && /1/.test(e))).toBe(true)
+  })
+
+  it('defers nothing when photo work is under the budget', async () => {
+    const d = deps() // default mock processes 4 photos/call across 3 vehicles = 12, well under 40
+    const result = await runSyncCore(d)
+    expect(result.status).toBe('success')
+    expect(result.photosDeferred).toBe(0)
+    expect(result.errors.some((e) => /budget/i.test(e))).toBe(false)
+  })
+})
+
+describe('resolveDuplicateVins', () => {
+  it('re-keys two vehicles sharing a VIN to their distinct stock numbers so both survive', () => {
+    const a = canonicalVehicle({
+      sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1050',
+      slug: 'nissan-sentra-vin1050',
+    })
+    const b = canonicalVehicle({
+      sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1051',
+      slug: 'nissan-sentra-vin1051',
+    })
+
+    const [resolvedA, resolvedB] = resolveDuplicateVins([a, b])
+
+    expect(resolvedA.sourceKey).toBe('A1050')
+    expect(resolvedA.sourceKeyType).toBe('stock')
+    expect(resolvedB.sourceKey).toBe('A1051')
+    expect(resolvedB.sourceKeyType).toBe('stock')
+    expect(resolvedA.sourceKey).not.toBe(resolvedB.sourceKey)
+    expect(resolvedA.slug).not.toBe(resolvedB.slug)
+  })
+
+  it('keeps the VIN populated on a re-keyed vehicle even though it is no longer the identity', () => {
+    const a = canonicalVehicle({ sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1050' })
+    const b = canonicalVehicle({ sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1051' })
+
+    const [resolvedA] = resolveDuplicateVins([a, b])
+
+    expect(resolvedA.vin).toBe('SHAREDVIN')
+  })
+
+  it('does not change sourceHash when re-keying — it fingerprints feed content, not our identity decision', () => {
+    const a = canonicalVehicle({
+      sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1050',
+      sourceHash: 'original-hash-a',
+    })
+    const b = canonicalVehicle({
+      sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1051',
+      sourceHash: 'original-hash-b',
+    })
+
+    const [resolvedA, resolvedB] = resolveDuplicateVins([a, b])
+
+    expect(resolvedA.sourceHash).toBe('original-hash-a')
+    expect(resolvedB.sourceHash).toBe('original-hash-b')
+  })
+
+  it('leaves a vehicle with a duplicate VIN and no stock number unchanged, for the planner to drop', () => {
+    const a = canonicalVehicle({ sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: 'A1050' })
+    const b = canonicalVehicle({ sourceKey: 'SHAREDVIN', sourceKeyType: 'vin', vin: 'SHAREDVIN', stockNumber: null })
+
+    const [resolvedA, resolvedB] = resolveDuplicateVins([a, b])
+
+    expect(resolvedA.sourceKey).toBe('A1050')
+    expect(resolvedB.sourceKey).toBe('SHAREDVIN')
+    expect(resolvedB.sourceKeyType).toBe('vin')
+  })
+
+  it('passes a feed with no duplicate VINs through untouched', () => {
+    const a = canonicalVehicle({ sourceKey: 'VIN-A', sourceKeyType: 'vin', vin: 'VIN-A', stockNumber: 'S1' })
+    const b = canonicalVehicle({ sourceKey: 'VIN-B', sourceKeyType: 'vin', vin: 'VIN-B', stockNumber: 'S2' })
+    const c = canonicalVehicle({ sourceKey: 'S3', sourceKeyType: 'stock', vin: null, stockNumber: 'S3' })
+
+    const resolved = resolveDuplicateVins([a, b, c])
+
+    expect(resolved).toEqual([a, b, c])
   })
 })

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Inventory>
+  <Vehicle>
+    <VIN>1GCUYDED5KZ123456</VIN>
+    <StockNumber>A1042</StockNumber>
+    <Year>2019</Year>
+    <Make>Chevrolet</Make>
+    <Model>Silverado 1500</Model>
+    <Mileage>78450</Mileage>
+    <Price>24995.00</Price>
+    <Photos><Photo>https://example.com/photos/a1042-1.jpg</Photo></Photos>
+  </Vehicle>
+  <Vehicle>
+    <VIN>1GCUYDED5KZ123456</VIN>
+    <StockNumber>A1042</StockNumber>
+    <Year>2019</Year>
+    <Make>Chevrolet</Make>
+    <Model>Silverado 1500</Model>
+    <Mileage>78450</Mileage>
+    <Price>24995.00</Price>
+    <Photos><Photo>https://example.com/photos/a1042-1.jpg</Photo></Photos>
+  </Vehicle>
+  <Vehicle>
+    <VIN>2HGFC2F59KH512345</VIN>
+    <StockNumber>A1043</StockNumber>
+    <Year>2019</Year>
+    <Make>Honda</Make>
+    <Model>Civic</Model>
+    <Mileage>62100</Mileage>
+    <Price>16995.00</Price>
+    <Photos><Photo>https://example.com/photos/a1043-1.jpg</Photo></Photos>
+  </Vehicle>
+  <Vehicle>
+    <VIN>2HGFC2F59KH512345</VIN>
+    <StockNumber>A1043</StockNumber>
+    <Year>2019</Year>
+    <Make>Honda</Make>
+    <Model>Civic</Model>
+    <Mileage>62100</Mileage>
+    <Price>16995.00</Price>
+    <Photos><Photo>https://example.com/photos/a1043-1.jpg</Photo></Photos>
+  </Vehicle>
+  <Vehicle>
+    <VIN>1FTEW1EP7JFA12345</VIN>
+    <StockNumber>A1044</StockNumber>
+    <Year>2018</Year>
+    <Make>Ford</Make>
+    <Model>F-150</Model>
+    <Mileage>94300</Mileage>
+    <Price>22500.00</Price>
+    <Photos></Photos>
+  </Vehicle>
+  <Vehicle>
+    <VIN>1FTEW1EP7JFA12345</VIN>
+    <StockNumber>A1044</StockNumber>
+    <Year>2018</Year>
+    <Make>Ford</Make>
+    <Model>F-150</Model>
+    <Mileage>94300</Mileage>
+    <Price>22500.00</Price>
+    <Photos></Photos>
+  </Vehicle>
+</Inventory>

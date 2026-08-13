@@ -48,7 +48,7 @@ export function toVehicleRow(
     description: v.description,
     features: v.features,
     sourceHash: v.sourceHash,
-    vinDecoded: (v.vinDecoded ?? null) as Record<string, string> | null,
+    vinDecoded: v.vinDecoded ?? null,
     priceReduced: opts.priceReduced,
     lastSeenAt: new Date(),
     updatedAt: new Date(),
@@ -67,11 +67,21 @@ export async function applyReconciliation(plan: ReconcilePlan): Promise<Reconcil
 
   await db.transaction(async (tx) => {
     for (const v of plan.toCreate) {
+      // onConflictDoNothing, not onConflictDoUpdate: Vercel cron does not
+      // prevent overlapping invocations, so two runs can both plan the same
+      // new vehicle. Without conflict handling, the second insert's unique
+      // violation on source_key rolls back this ENTIRE transaction -- every
+      // create and update in the batch, not just the colliding row -- and
+      // the run is recorded 'failed'. DoUpdate would race on the same row
+      // against a concurrent transaction writing equivalent data; DoNothing
+      // just no-ops and lets the vehicle the other run created stand. That
+      // row is then picked up as a normal update on the next tick, so
+      // nothing is lost -- only silently deferred one cycle.
       await tx.insert(vehicles).values({
         ...toVehicleRow(v, { priceReduced: false }),
         status: 'available',
         firstSeenAt: new Date(),
-      })
+      }).onConflictDoNothing({ target: vehicles.sourceKey })
       counts.created++
     }
 
