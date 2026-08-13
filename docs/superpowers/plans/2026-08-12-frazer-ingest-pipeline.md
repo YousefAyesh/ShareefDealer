@@ -461,7 +461,7 @@ export function buildSlug(input: SlugInput): string {
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `npx vitest run tests/lib/`
-Expected: PASS, 7 tests
+Expected: PASS, 9 tests (5 in `hash.test.ts`, 4 in `slug.test.ts`)
 
 - [ ] **Step 6: Commit**
 
