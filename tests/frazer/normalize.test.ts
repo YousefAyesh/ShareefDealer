@@ -32,6 +32,21 @@ describe('titleCase', () => {
   it('fixes ALL CAPS', () => expect(titleCase('NISSAN ALTIMA')).toBe('Nissan Altima'))
   it('leaves mixed case alone', () => expect(titleCase('Silverado 1500')).toBe('Silverado 1500'))
   it('returns null for null', () => expect(titleCase(null)).toBeNull())
+
+  // Automotive trims/makes are full of short uppercase acronyms. A token of
+  // 3 chars or fewer, or one containing a digit, is preserved as-is rather
+  // than being title-cased.
+  it('preserves a 2-char uppercase trim token', () => expect(titleCase('LT')).toBe('LT'))
+  it('preserves a 3-char uppercase trim token', () => expect(titleCase('XLE')).toBe('XLE'))
+  it('preserves short acronym tokens but title-cases a real word among them', () =>
+    // GMC (3 chars) and SLT (3 chars) are preserved; SIERRA (6 chars, no digit) is title-cased.
+    expect(titleCase('GMC SIERRA SLT')).toBe('GMC Sierra SLT'))
+  it('preserves an alphanumeric token because it contains a digit', () =>
+    expect(titleCase('SR5')).toBe('SR5'))
+  it('preserves a drivetrain-style alphanumeric token', () => expect(titleCase('4WD')).toBe('4WD'))
+  it('preserves a hyphenated alphanumeric token', () => expect(titleCase('F-150')).toBe('F-150'))
+  it('title-cases every token when all are 4+ chars and digit-free', () =>
+    expect(titleCase('CREW CAB PICKUP')).toBe('Crew CAB Pickup'))
 })
 
 describe('normalizeVehicle', () => {

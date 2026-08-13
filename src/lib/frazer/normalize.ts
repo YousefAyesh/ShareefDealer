@@ -23,13 +23,28 @@ export function parseIntSafe(value: string | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** Only rewrites strings that are entirely uppercase; leaves good input alone. */
+/**
+ * Only rewrites strings that are entirely uppercase; leaves good input alone.
+ *
+ * Automotive trims/makes/body styles are full of legitimate short uppercase
+ * acronyms (LT, XLE, SR5, 4WD, GMC, BMW, CVT). Per whitespace-separated
+ * token: a token of 3 characters or fewer, or one containing a digit, is
+ * preserved as-is. Everything else (real words like NISSAN, SIERRA, PICKUP)
+ * gets title-cased. Known imperfection: a genuine 3-letter word in an
+ * all-caps value (e.g. "CAB" in "CREW CAB PICKUP", or the make "KIA") stays
+ * uppercase rather than becoming "Cab"/"Kia" — accepted tradeoff rather than
+ * maintaining an acronym allowlist.
+ */
 export function titleCase(value: string | null): string | null {
   if (!value) return null
   if (value !== value.toUpperCase()) return value
   return value
-    .toLowerCase()
-    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    .split(/\s+/)
+    .map((token) => {
+      if (token.length <= 3 || /\d/.test(token)) return token
+      return token.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    })
+    .join(' ')
 }
 
 function normalizeVin(vin: string | null): string | null {
