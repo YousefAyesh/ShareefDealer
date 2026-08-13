@@ -82,6 +82,12 @@ describe('planReconciliation', () => {
     expect(plan.toMarkSold).toEqual([])
   })
 
+  it('lists a sold vehicle in both toRestore and unchangedIds when its hash is unchanged — toRestore is authoritative for status regardless of the overlap', () => {
+    const plan = planReconciliation([incoming()], [existing({ status: 'sold', sourceHash: 'hash-a' })])
+    expect(plan.toRestore).toEqual(['id-1'])
+    expect(plan.unchangedIds).toEqual(['id-1'])
+  })
+
   it('leaves a hidden vehicle hidden and never marks it sold', () => {
     const plan = planReconciliation([incoming()], [existing({ status: 'hidden' })])
     expect(plan.toRestore).toEqual([])

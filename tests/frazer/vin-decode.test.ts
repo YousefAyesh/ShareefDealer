@@ -49,6 +49,14 @@ describe('decodeVin', () => {
     expect(result?.bodyStyle).toBeNull()
     expect(result?.drivetrain).toBeNull()
   })
+
+  it('clears the abort timer even when fetch rejects — no leaked timers on a flaky vPIC', async () => {
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNRESET')))
+    await decodeVin('1GCUYDED5KZ123456')
+    expect(clearSpy).toHaveBeenCalled()
+    clearSpy.mockRestore()
+  })
 })
 
 describe('applyVinDecode', () => {

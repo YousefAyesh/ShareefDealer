@@ -10,6 +10,7 @@ const MAX_YEAR = new Date().getFullYear() + 2
 export function parseMoneyCents(value: string | null): number | null {
   if (!value) return null
   const cleaned = value.replace(/[$,\s]/g, '')
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) return null
   const n = Number(cleaned)
   if (!Number.isFinite(n) || n <= 0) return null
   return Math.round(n * 100)
@@ -18,7 +19,7 @@ export function parseMoneyCents(value: string | null): number | null {
 export function parseIntSafe(value: string | null): number | null {
   if (!value) return null
   const cleaned = value.replace(/[,\s]/g, '')
-  if (!/^\d+$/.test(cleaned)) return null
+  if (!/^\d+(\.0+)?$/.test(cleaned)) return null
   const n = Number(cleaned)
   return Number.isFinite(n) ? n : null
 }

@@ -19,6 +19,9 @@ describe('parseMoneyCents', () => {
   it('treats garbage as absent', () => expect(parseMoneyCents('call')).toBeNull())
   it('rejects negatives', () => expect(parseMoneyCents('-500')).toBeNull())
   it('rounds half-cents', () => expect(parseMoneyCents('10.005')).toBe(1001))
+  it('rejects scientific notation', () => expect(parseMoneyCents('1e5')).toBeNull())
+  it('rejects a leading plus sign', () => expect(parseMoneyCents('+500')).toBeNull())
+  it('rejects hexadecimal literals', () => expect(parseMoneyCents('0x10')).toBeNull())
 })
 
 describe('parseIntSafe', () => {
@@ -26,6 +29,10 @@ describe('parseIntSafe', () => {
   it('returns null for garbage', () => expect(parseIntSafe('N/A')).toBeNull())
   it('allows zero (a new car has 0 miles)', () => expect(parseIntSafe('0')).toBe(0))
   it('rejects negatives', () => expect(parseIntSafe('-5')).toBeNull())
+  it('accepts a whole number with a trailing .0', () => expect(parseIntSafe('78450.0')).toBe(78450))
+  it('accepts a whole number with a trailing .00', () => expect(parseIntSafe('78450.00')).toBe(78450))
+  it('rejects a genuinely fractional value rather than truncating it', () =>
+    expect(parseIntSafe('78450.5')).toBeNull())
 })
 
 describe('titleCase', () => {

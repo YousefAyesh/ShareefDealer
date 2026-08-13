@@ -35,10 +35,14 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-    const res = await fetch(`${VPIC_URL}/${encodeURIComponent(vin)}?format=json`, {
-      signal: controller.signal,
-    })
-    clearTimeout(timer)
+    let res: Response
+    try {
+      res = await fetch(`${VPIC_URL}/${encodeURIComponent(vin)}?format=json`, {
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
 
     if (!res.ok) return null
     const body = (await res.json()) as { Results?: Record<string, unknown>[] }
