@@ -65,7 +65,7 @@ Files that change together live together — everything that understands Frazer 
 ## Task 1: Project scaffold
 
 **Files:**
-- Create: `package.json`, `tsconfig.json`, `vitest.config.ts`, `.env.example`
+- Create: `package.json`, `tsconfig.json`, `vitest.config.mts`, `.env.example`
 
 - [ ] **Step 1: Scaffold Next.js**
 
@@ -82,7 +82,9 @@ npm install drizzle-orm postgres fast-xml-parser zod sharp @vercel/blob
 npm install -D drizzle-kit vitest @vitest/coverage-v8 dotenv
 ```
 
-- [ ] **Step 3: Create `vitest.config.ts`**
+- [ ] **Step 3: Create `vitest.config.mts`**
+
+The `.mts` extension is deliberate. Vite will make native ESM config loading the default in a future major; without it, a routine dependency bump breaks test running with no code change. `.mts` also means `__dirname` is unavailable, hence `import.meta.dirname`.
 
 ```typescript
 import { defineConfig } from 'vitest/config'
@@ -94,7 +96,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
   },
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
 })
 ```
@@ -2833,3 +2835,11 @@ The moment the dealer supplies the feed URL (intake question 24), do this **befo
 - **The minimum-photo guard (spec §4.7).** Zero-photo vehicles are ingested and stored by this plan, as the spec requires. Excluding them from listing pages and 404ing their VDP is a query and routing concern, so it belongs in the site plan.
 - **Persisting the raw feed snapshot.** `runSyncCore` returns `rawSnapshot` and `sync_runs.raw_snapshot_ref` exists to hold a pointer to it, but nothing uploads it yet. Wire this to blob storage when the real feed arrives — replaying a real bad feed is worth far more than replaying a synthetic one.
 - **Hide/unhide UI.** The `hidden` status is fully respected by the reconciliation planner and covered by tests; only the admin button is missing. It belongs with the rest of the vehicle admin in the site plan.
+
+## Findings carried forward to the site plan
+
+Surfaced during review of Task 1. Neither belongs to the ingest pipeline, and both will cause real problems if forgotten.
+
+**There are two copies of `sharp` in this project.** Next declares `sharp` as its own optional dependency for `next/image`, and because its range (`^0.34.3`) conflicts with ours (`^0.35.3`), npm nests a private copy at `next/node_modules/sharp@0.34.5` — which currently carries a high-severity advisory. Our photo pipeline uses the safe top-level copy. But if the site renders feed photos through `next/image`, that is a *different* code path running the vulnerable copy against images downloaded from a third party. `npm ls sharp` does not reveal the nested copy. Decide deliberately in the site plan whether feed photos go through `next/image` at all — our pipeline already emits pre-sized WebP variants, so `next/image` optimization is arguably redundant for them.
+
+**The default Next.js starter content is still in place.** `src/app/layout.tsx` exports `metadata.title = "Create Next App"`, `src/app/page.tsx` is boilerplate, and `README.md` is the generic template. Task 1 was scoped to scaffolding only, so leaving them was correct — but no task in this plan revisits them, and shipping a dealership site whose browser tab reads "Create Next App" is exactly the kind of thing that survives to production. The site plan must own replacing all three.
