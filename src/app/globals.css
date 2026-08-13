@@ -1,26 +1,86 @@
 @import "tailwindcss";
 
+/*
+ * Roadstar Auto Sales brand tokens, extracted from public/Logo.jpeg.
+ * The logo is a JPEG with a cream background baked in (no transparency) --
+ * it must only ever sit on a cream/light surface, never on navy.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-navy: #182848;
+  --color-cream: #f5f1e6;
+  --color-gold: #d0a048;
+  --color-red: #b83828;
+
+  /* Slightly darker/lighter variants for hover/active states, derived from
+     the brand colors above -- not new brand colors, just interaction
+     states of the existing ones. */
+  --color-navy-dark: #101b34;
+  --color-red-dark: #9a2e21;
+  --color-cream-dark: #e8e1d0;
+
+  --background: var(--color-cream);
+  --foreground: var(--color-navy);
+
+  /* z-index scale */
+  --z-base: 0;
+  --z-header: 40;
+  --z-sticky-call-bar: 50;
+  --z-overlay: 60;
+  --z-modal: 70;
+  --z-toast: 80;
 }
 
 @theme inline {
+  --color-navy: var(--color-navy);
+  --color-navy-dark: var(--color-navy-dark);
+  --color-cream: var(--color-cream);
+  --color-cream-dark: var(--color-cream-dark);
+  --color-gold: var(--color-gold);
+  --color-red: var(--color-red);
+  --color-red-dark: var(--color-red-dark);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-archivo-black), Arial, sans-serif;
+  --font-sans: var(--font-inter), Arial, Helvetica, sans-serif;
+
+  --z-index-base: var(--z-base);
+  --z-index-header: var(--z-header);
+  --z-index-sticky-call-bar: var(--z-sticky-call-bar);
+  --z-index-overlay: var(--z-overlay);
+  --z-index-modal: var(--z-modal);
+  --z-index-toast: var(--z-toast);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Keep all transitions short and simple: color/opacity only, 150-300ms.
+   No parallax, no scroll-triggered motion -- this audience is on phones,
+   often on slow connections. */
+* {
+  transition-property: color, background-color, border-color, opacity, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible focus rings everywhere, brand-colored. */
+:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
 }

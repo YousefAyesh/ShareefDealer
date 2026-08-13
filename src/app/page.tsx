@@ -1,103 +1,148 @@
-import Image from "next/image";
+import Image from 'next/image'
+import Link from 'next/link'
+import { VehicleCard } from '@/components/VehicleCard'
+import { CheckCircleIcon, ClockIcon, MapPinIcon, PhoneIcon, SearchIcon } from '@/components/icons'
+import { DEALER, fullAddress } from '@/lib/dealer'
+import { getNewestArrivals } from '@/lib/inventory'
 
-export default function Home() {
+const BODY_TYPES = [
+  { label: 'Trucks', value: 'Truck' },
+  { label: 'SUVs', value: 'SUV' },
+  { label: 'Sedans', value: 'Sedan' },
+]
+
+const PRICE_BANDS = [
+  { label: 'Under $10,000', value: '10000' },
+  { label: 'Under $15,000', value: '15000' },
+  { label: 'Under $20,000', value: '20000' },
+]
+
+export default async function HomePage() {
+  const newest = await getNewestArrivals(6)
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+    <>
+      {/* Hero */}
+      <section className="bg-cream">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+          <div className="flex flex-col items-center text-center">
             <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+              src="/Logo.jpeg"
+              alt={`${DEALER.name} logo`}
+              width={120}
+              height={120}
+              priority
+              className="h-24 w-24 rounded-md sm:h-28 sm:w-28"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <h1 className="mt-5 max-w-2xl font-display text-4xl uppercase leading-[1.05] tracking-tight text-navy sm:text-5xl">
+              Your job is your credit.
+            </h1>
+            <p className="mt-4 max-w-xl text-lg text-navy/80">
+              Austin&apos;s Buy Here Pay Here lot. We finance in-house — no bank, no runaround.
+              Down payment and weekly payment shown up front on every car.
+            </p>
+
+            <div className="mt-7 flex w-full max-w-md flex-col gap-3 sm:flex-row">
+              <a
+                href={DEALER.phoneTel}
+                className="flex min-h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md bg-red px-5 text-base font-bold text-cream hover:bg-red-dark"
+              >
+                <PhoneIcon className="h-5 w-5" />
+                Call {DEALER.phoneDisplay}
+              </a>
+              <Link
+                href="/inventory"
+                className="flex min-h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-navy px-5 text-base font-bold text-navy hover:bg-navy hover:text-cream"
+              >
+                <SearchIcon className="h-5 w-5" />
+                Browse Inventory
+              </Link>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+      </section>
+
+      {/* Quick filters */}
+      <section className="mx-auto max-w-6xl px-4 pb-10 sm:px-6">
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-navy/70">Shop by type</h2>
+            <div className="flex flex-wrap gap-2">
+              {BODY_TYPES.map((bt) => (
+                <Link
+                  key={bt.value}
+                  href={`/inventory?body=${encodeURIComponent(bt.value)}`}
+                  className="min-h-11 cursor-pointer rounded-full border border-navy/20 bg-white/50 px-4 py-2 text-sm font-semibold text-navy hover:border-navy hover:bg-navy hover:text-cream"
+                >
+                  {bt.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-navy/70">Shop by price</h2>
+            <div className="flex flex-wrap gap-2">
+              {PRICE_BANDS.map((pb) => (
+                <Link
+                  key={pb.value}
+                  href={`/inventory?price_max=${pb.value}`}
+                  className="min-h-11 cursor-pointer rounded-full border border-navy/20 bg-white/50 px-4 py-2 text-sm font-semibold text-navy hover:border-navy hover:bg-navy hover:text-cream"
+                >
+                  {pb.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Newest arrivals */}
+      <section className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-2xl uppercase tracking-tight text-navy">Newest Arrivals</h2>
+          <Link href="/inventory" className="cursor-pointer text-sm font-bold text-red hover:text-red-dark">
+            View all inventory →
+          </Link>
+        </div>
+        {newest.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {newest.map((vehicle) => (
+              <VehicleCard key={vehicle.id} vehicle={vehicle} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-navy/70">New inventory is on the way — call us and we&apos;ll tell you what&apos;s coming in.</p>
+        )}
+      </section>
+
+      {/* Trust strip */}
+      <section className="bg-navy py-10 text-cream">
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 sm:grid-cols-3 sm:px-6">
+          <div className="flex items-start gap-3">
+            <MapPinIcon className="mt-0.5 h-6 w-6 shrink-0 text-gold" />
+            <div>
+              <p className="font-display text-sm uppercase tracking-wide text-cream">Austin, Texas</p>
+              <p className="mt-1 text-sm text-cream/70">{fullAddress}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <ClockIcon className="mt-0.5 h-6 w-6 shrink-0 text-gold" />
+            <div>
+              <p className="font-display text-sm uppercase tracking-wide text-cream">Open Today</p>
+              <p className="mt-1 text-sm text-cream/70">{DEALER.hours[0].hours}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <CheckCircleIcon className="mt-0.5 h-6 w-6 shrink-0 text-gold" />
+            <div>
+              <p className="font-display text-sm uppercase tracking-wide text-cream">We Finance Everyone</p>
+              <p className="mt-1 text-sm text-cream/70">
+                Real down payment, real weekly payment. No credit check required.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  )
 }
