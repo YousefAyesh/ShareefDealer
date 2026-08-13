@@ -42,6 +42,7 @@ CREATE TABLE "vehicle_photos" (
 	"vehicle_id" uuid NOT NULL,
 	"position" integer NOT NULL,
 	"content_hash" text NOT NULL,
+	"source_url" text NOT NULL,
 	"url_thumb" text NOT NULL,
 	"url_card" text NOT NULL,
 	"url_full" text NOT NULL,

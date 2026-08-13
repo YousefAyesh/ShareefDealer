@@ -1,5 +1,5 @@
 {
-  "id": "1586746d-e527-416c-ad56-6c316e0fc768",
+  "id": "eb9d4dd6-e9e0-4bda-bdf4-3d3cdb503c32",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -277,6 +277,12 @@
         },
         "content_hash": {
           "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_url": {
+          "name": "source_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true

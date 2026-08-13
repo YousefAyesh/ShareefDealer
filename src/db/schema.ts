@@ -55,6 +55,7 @@ export const vehiclePhotos = pgTable('vehicle_photos', {
   vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
   position: integer('position').notNull(),
   contentHash: text('content_hash').notNull(),
+  sourceUrl: text('source_url').notNull(),
   urlThumb: text('url_thumb').notNull(),
   urlCard: text('url_card').notNull(),
   urlFull: text('url_full').notNull(),
