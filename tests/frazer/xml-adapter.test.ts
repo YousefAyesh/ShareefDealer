@@ -74,4 +74,43 @@ describe('xmlAdapter', () => {
   it('throws on malformed XML so the run can abort', () => {
     expect(() => xmlAdapter.parse('<Inventory><Vehicle>')).toThrow()
   })
+
+  it('includes both line and column in the malformed-XML error message', () => {
+    expect(() => xmlAdapter.parse('<Inventory><Vehicle>')).toThrow(/line 1.*column 1/)
+  })
+
+  it('drops attributes rather than corrupting the value into an object', () => {
+    const xml = `<?xml version="1.0"?><Inventory><Vehicle><VIN>1GCUYDED5KZ123456</VIN><StockNumber>A1042</StockNumber><Price currency="USD">9995</Price></Vehicle></Inventory>`
+    const [v] = xmlAdapter.parse(xml)
+    expect(v.price).toBe('9995')
+  })
+
+  it('unwraps a #text-wrapped value instead of stringifying it to "[object Object]"', () => {
+    // Mixed content -- text alongside a nested element -- is a shape the parser still
+    // wraps as { '#text': ..., <child>: ... } even with attributes ignored. This proves
+    // str()'s defensive #text unwrap works, so that if a future parser upgrade or config
+    // change ever reintroduces a wrapped value elsewhere, it degrades to correct text
+    // instead of "[object Object]".
+    const xml = `<?xml version="1.0"?><Inventory><Vehicle><VIN>1GCUYDED5KZ123456</VIN><StockNumber>A1042</StockNumber><Description>Great truck <em>low miles</em></Description></Vehicle></Inventory>`
+    const [v] = xmlAdapter.parse(xml)
+    expect(v.description).toBe('Great truck')
+  })
+
+  it('decodes numeric character references (decimal and hex) in text content', () => {
+    const xml = `<?xml version="1.0"?><Inventory><Vehicle><VIN>1GCUYDED5KZ123456</VIN><StockNumber>A1042</StockNumber><Description>Owner&#39;s manual, one owner&#x27;s car</Description></Vehicle></Inventory>`
+    const [v] = xmlAdapter.parse(xml)
+    expect(v.description).toBe("Owner's manual, one owner's car")
+  })
+
+  it('throws when the document has no Inventory root at all (e.g. an HTML error page)', () => {
+    expect(() => xmlAdapter.parse('<html><body>503 Service Unavailable</body></html>')).toThrow(
+      /expected root element <Inventory>.*found <html>/
+    )
+  })
+
+  it('throws when the document is well-formed XML with the wrong root element', () => {
+    expect(() =>
+      xmlAdapter.parse('<?xml version="1.0"?><Catalog><Vehicle><VIN>1GCUYDED5KZ123456</VIN></Vehicle></Catalog>')
+    ).toThrow(/expected root element <Inventory>.*found <Catalog>/)
+  })
 })

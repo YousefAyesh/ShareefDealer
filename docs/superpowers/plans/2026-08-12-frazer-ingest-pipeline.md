@@ -2841,6 +2841,18 @@ The moment the dealer supplies the feed URL (intake question 24), do this **befo
 4. Re-run `npm test`. Everything downstream should still pass. If a test outside `xml-adapter.test.ts` fails, feed field names have leaked out of the adapter and that is a bug to fix.
 5. Ask the dealer to enter one real vehicle in Frazer and photograph it in Sidekick, then run a manual sync from `/admin/sync` and confirm it appears end to end.
 
+### Specific things to check in the real feed
+
+Each of these was found by probing the adapter with inputs the synthetic fixtures do not cover. None can be resolved without a real sample.
+
+| Check | Why it matters |
+|---|---|
+| **Does any data element carry attributes?** e.g. `<Price currency="USD">9995</Price>` | Handled now — attributes are ignored and `str()` unwraps `#text` — but confirm no attribute carries information we actually need. |
+| **Does the feed use XML namespaces?** e.g. `<ns:Vehicle>` | The adapter matches unprefixed tag names, case-sensitively. A namespaced feed currently throws "missing Inventory root". Deliberately not handled on speculation. |
+| **What does the endpoint return on failure?** | An auth expiry or maintenance page returning HTML is *well-formed XML*. The adapter now throws on a missing `Inventory` root rather than reporting an empty lot, so this surfaces as a parse failure, not a phantom sellout. |
+| **Are special characters numeric character references?** e.g. `&#39;` | A .NET-generated feed plausibly encodes apostrophes this way. Undecoded, they render literally in descriptions on the public site. |
+| **Do the tag names actually match?** | The expected single-file rewrite point. Everything above is secondary to this. |
+
 ## Known limitations
 
 **Slug collisions are possible but fail safely.** `buildSlug` disambiguates with the last 8 characters of the source key. Two different VINs can theoretically share those 8 characters. If it happens, the unique index rejects the insert, the transaction rolls back, and the run is recorded as failed with last-good data intact — loud and safe, which is the correct direction to fail. Add a numeric suffix fallback only if it ever actually occurs.
