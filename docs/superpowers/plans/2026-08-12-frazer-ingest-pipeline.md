@@ -2234,7 +2234,7 @@ function deps(over: Partial<Parameters<typeof runSyncCore>[0]> = {}) {
   return {
     adapter: xmlAdapter,
     fetchFeed: vi.fn().mockResolvedValue(fixture('normal.xml')),
-    loadExisting: vi.fn().mockResolvedValue([]),
+    loadExisting: vi.fn().mockResolvedValue([]),  // ExistingVehicleRow[] — include hasVinDecode on any fixture rows
     lastGoodCount: vi.fn().mockResolvedValue(null),
     applyPlan: vi.fn().mockResolvedValue({ created: 3, updated: 0, markedSold: 0, restored: 0 }),
     syncPhotos: vi.fn().mockResolvedValue(4),
@@ -2328,10 +2328,21 @@ import type { CanonicalVehicle, FeedAdapter } from './types'
 import type { ReconcileCounts } from './reconcile-apply'
 import type { ReconcilePlan } from './reconcile-plan'
 
+/**
+ * What the orchestrator needs from a stored row: the planner's projection,
+ * plus whether vPIC has already been decoded for it.
+ *
+ * `hasVinDecode` is carried here rather than in `ExistingVehicle` so that
+ * `reconcile-plan.ts` stays a pure feed-vs-database diff with no knowledge of
+ * enrichment. Structural typing means this passes to `planReconciliation`
+ * unchanged.
+ */
+export type ExistingVehicleRow = ExistingVehicle & { hasVinDecode: boolean }
+
 export type SyncDeps = {
   adapter: FeedAdapter
   fetchFeed: () => Promise<string>
-  loadExisting: () => Promise<ExistingVehicle[]>
+  loadExisting: () => Promise<ExistingVehicleRow[]>
   lastGoodCount: () => Promise<number | null>
   applyPlan: (plan: ReconcilePlan) => Promise<ReconcileCounts>
   syncPhotos: (sourceKey: string, urls: string[]) => Promise<number>
@@ -2410,25 +2421,47 @@ export async function runSyncCore(deps: SyncDeps): Promise<SyncResult> {
     return result
   }
 
-  // 4. Enrich. Never fatal.
-  const enriched: CanonicalVehicle[] = []
-  for (const v of canonical) {
-    try {
-      enriched.push(await deps.decorateWithVin(v))
-    } catch (err) {
-      result.errors.push(`VIN decode failed for ${v.sourceKey}: ${(err as Error).message}`)
-      enriched.push(v)
-    }
-  }
-
-  // 5. Plan and apply.
+  // 4. Plan against what is stored. Pure — no network, no writes.
   const existing = await deps.loadExisting()
-  const plan = planReconciliation(enriched, existing)
+  const plan = planReconciliation(canonical, existing)
 
   for (const key of plan.duplicateKeys) {
     result.errors.push(`Duplicate source key in feed, kept first row: ${key}`)
   }
 
+  // 5. Enrich — but only new vehicles, and changed vehicles that have no
+  //    stored decode yet. Unchanged vehicles are skipped entirely.
+  //
+  //    Planning BEFORE enriching is what bounds vPIC traffic. Decoding every
+  //    vehicle every run would be ~28,800 requests/day against a free
+  //    government API for a lot that gains two cars a week.
+  //
+  //    Deliberately not hash-driven: sourceHash fingerprints the FEED, not the
+  //    stored row, so it can never detect a decode-only change. Gating on
+  //    hasVinDecode is what gives a failed decode a retry path.
+  const noStoredDecode = new Set(
+    existing.filter((e) => !e.hasVinDecode).map((e) => e.sourceKey),
+  )
+
+  const decodeSafely = async (v: CanonicalVehicle): Promise<CanonicalVehicle> => {
+    try {
+      return await deps.decorateWithVin(v)
+    } catch (err) {
+      result.errors.push(`VIN decode failed for ${v.sourceKey}: ${(err as Error).message}`)
+      return v
+    }
+  }
+
+  for (let i = 0; i < plan.toCreate.length; i++) {
+    plan.toCreate[i] = await decodeSafely(plan.toCreate[i])
+  }
+  for (const u of plan.toUpdate) {
+    if (noStoredDecode.has(u.vehicle.sourceKey)) {
+      u.vehicle = await decodeSafely(u.vehicle)
+    }
+  }
+
+  // 6. Apply.
   const counts = await deps.applyPlan(plan)
   result.created = counts.created
   result.updated = counts.updated
@@ -2518,15 +2551,20 @@ async function fetchFeedWithRetry(): Promise<string> {
   throw lastError ?? new Error('Feed fetch failed')
 }
 
-async function loadExisting(): Promise<ExistingVehicle[]> {
+async function loadExisting(): Promise<ExistingVehicleRow[]> {
   const rows = await db.select({
     id: vehicles.id,
     sourceKey: vehicles.sourceKey,
     sourceHash: vehicles.sourceHash,
     status: vehicles.status,
     priceCents: vehicles.priceCents,
+    vinDecoded: vehicles.vinDecoded,
   }).from(vehicles)
-  return rows as ExistingVehicle[]
+
+  return rows.map(({ vinDecoded, ...row }) => ({
+    ...row,
+    hasVinDecode: vinDecoded !== null,
+  })) as ExistingVehicleRow[]
 }
 
 async function lastGoodCount(): Promise<number | null> {
@@ -2538,11 +2576,19 @@ async function lastGoodCount(): Promise<number | null> {
   return run?.count ?? null
 }
 
+/**
+ * Decodes one vehicle. Callers decide WHETHER to call this — the orchestrator
+ * gates on hasVinDecode so vPIC is hit only for new arrivals and for changed
+ * vehicles that were never successfully decoded. Do not call this in a loop
+ * over the whole feed.
+ *
+ * Storing `vinDecoded` is what closes the gate for next run.
+ */
 async function decorateWithVin(v: CanonicalVehicle): Promise<CanonicalVehicle> {
   if (!v.vin) return v
   const decoded = await decodeVin(v.vin)
   if (!decoded) return v
-  return { ...v, ...applyVinDecode(v, decoded), vinDecoded: decoded } as CanonicalVehicle
+  return { ...applyVinDecode(v, decoded), vinDecoded: decoded }
 }
 
 async function syncPhotos(sourceKey: string, urls: string[]): Promise<number> {
