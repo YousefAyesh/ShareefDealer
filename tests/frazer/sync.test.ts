@@ -23,6 +23,7 @@ function rowsMatching(opts: { hasVinDecode: boolean }) {
     status: 'available' as const,
     priceCents: v.priceCents,
     hasVinDecode: opts.hasVinDecode,
+    photoCount: v.photoUrls.length,
   }))
 }
 
@@ -139,5 +140,38 @@ describe('runSyncCore', () => {
     const result = await runSyncCore(d)
     expect(result.status).toBe('success')
     expect(result.errors.some((e) => /vpic down/.test(e))).toBe(true)
+  })
+
+  it('syncs photos for new vehicles', async () => {
+    const d = deps() // loadExisting is empty, so all 3 feed vehicles are new
+    await runSyncCore(d)
+    expect(d.syncPhotos).toHaveBeenCalledTimes(3)
+  })
+
+  it('syncs photos for changed vehicles', async () => {
+    const d = deps({ loadExisting: vi.fn().mockResolvedValue(rowsStale({ hasVinDecode: true })) })
+    await runSyncCore(d)
+    expect(d.syncPhotos).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not sync photos for unchanged vehicles whose stored photo count matches the feed — including a vehicle with zero feed photos', async () => {
+    // rowsMatching derives photoCount from each vehicle's real photoUrls.length,
+    // so this covers A1044 (0 feed photos, 0 stored) as well as A1042/A1043.
+    // 0 < 0 is false, so a zero-photo vehicle must fall out as "complete", not
+    // be mistaken for "incomplete" and retried forever.
+    const d = deps({ loadExisting: vi.fn().mockResolvedValue(rowsMatching({ hasVinDecode: true })) })
+    await runSyncCore(d)
+    expect(d.syncPhotos).not.toHaveBeenCalled()
+  })
+
+  it('retries photo sync for an unchanged vehicle with fewer stored photos than the feed lists', async () => {
+    const rows = rowsMatching({ hasVinDecode: true })
+    // A1042 (index 0) lists 2 photos in the feed; simulate only 1 having made it to storage.
+    const incomplete = rows[0]
+    rows[0] = { ...incomplete, photoCount: incomplete.photoCount - 1 }
+    const d = deps({ loadExisting: vi.fn().mockResolvedValue(rows) })
+    await runSyncCore(d)
+    expect(d.syncPhotos).toHaveBeenCalledTimes(1)
+    expect(d.syncPhotos).toHaveBeenCalledWith(incomplete.sourceKey, expect.any(Array))
   })
 })

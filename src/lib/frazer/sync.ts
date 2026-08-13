@@ -13,7 +13,11 @@ import type { ReconcilePlan } from './reconcile-plan'
  * reconcile-plan.ts stays a pure feed-vs-database diff with no knowledge of
  * enrichment. Structural typing lets this pass to planReconciliation as-is.
  */
-export type ExistingVehicleRow = ExistingVehicle & { hasVinDecode: boolean }
+export type ExistingVehicleRow = ExistingVehicle & {
+  hasVinDecode: boolean
+  /** Count of photo rows currently stored for this vehicle. See step 7 below. */
+  photoCount: number
+}
 
 export type SyncDeps = {
   adapter: FeedAdapter
@@ -130,8 +134,51 @@ export async function runSyncCore(deps: SyncDeps): Promise<SyncResult> {
   result.markedSold = counts.markedSold
   result.vehiclesSeen = plan.toCreate.length + plan.toUpdate.length + plan.unchangedIds.length
 
-  // 7. Photos. A failure for one vehicle never fails the run.
+  // 7. Photos. Sync only vehicles that need it, never the whole feed every
+  //    run — each syncPhotos call costs a DB lookup of the vehicle plus its
+  //    stored photos before planPhotoSync can even tell nothing changed, and
+  //    at 300 vehicles x 96 runs/day that's tens of thousands of queries to
+  //    learn nothing. A vehicle needs its photos synced when EITHER:
+  //
+  //      (a) it is new or changed (toCreate / toUpdate), OR
+  //      (b) it is unchanged but its stored photo count is behind what the
+  //          feed lists for it — a previous photo download failed.
+  //
+  //    Neither half alone is sufficient:
+  //      - "(a) only" misses the retry case. `photoUrls` is part of the
+  //        hashed field set, so a vehicle whose download failed has an
+  //        UNCHANGED hash next run (the feed didn't change, only our copy
+  //        is incomplete) and would be skipped forever under (a) alone. A
+  //        vehicle with too few photos is excluded from listing pages by
+  //        the minimum-photo rule, so "never retried" means a car that
+  //        silently never appears on the site — the exact "blank instead
+  //        of degraded" failure this pipeline exists to avoid.
+  //      - "(b) only" would mean re-checking photoCount against the feed
+  //        for every unchanged vehicle every run — the same per-run
+  //        DB-hammering problem this gating exists to eliminate, just
+  //        moved from vPIC to Postgres.
+  //
+  //    Do not simplify this to "only changed vehicles" — that reintroduces
+  //    the never-retry bug.
+  const canonicalByKey = new Map(canonical.map((v) => [v.sourceKey, v]))
+
+  const needsPhotoSync = new Set<string>([
+    ...plan.toCreate.map((v) => v.sourceKey),
+    ...plan.toUpdate.map((u) => u.vehicle.sourceKey),
+  ])
+
+  for (const e of existing) {
+    if (needsPhotoSync.has(e.sourceKey)) continue // already covered by (a)
+    const feedVehicle = canonicalByKey.get(e.sourceKey)
+    if (!feedVehicle) continue // no longer in the feed; nothing to sync
+    if (e.photoCount < feedVehicle.photoUrls.length) {
+      needsPhotoSync.add(e.sourceKey)
+    }
+  }
+
+  // A failure for one vehicle never fails the run.
   for (const v of canonical) {
+    if (!needsPhotoSync.has(v.sourceKey)) continue
     try {
       result.photosProcessed += await deps.syncPhotos(v.sourceKey, v.photoUrls)
     } catch (err) {
