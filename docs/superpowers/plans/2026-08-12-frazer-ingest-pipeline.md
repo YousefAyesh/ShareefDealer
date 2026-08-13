@@ -991,13 +991,24 @@ export function parseIntSafe(value: string | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** Only rewrites strings that are entirely uppercase; leaves good input alone. */
+/**
+ * Only rewrites strings that are entirely uppercase; leaves good input alone.
+ *
+ * Tokens of <=3 chars or containing a digit are preserved, because automotive
+ * data is full of legitimately-uppercase short tokens: LT, XLE, SLT, GMC, BMW,
+ * SUV, SR5, 4WD. Title-casing those produces "Lt" and "Bmw", which read as bugs.
+ * See "Known limitations" for the trade-off this accepts.
+ */
 export function titleCase(value: string | null): string | null {
   if (!value) return null
   if (value !== value.toUpperCase()) return value
   return value
-    .toLowerCase()
-    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    .split(/\s+/)
+    .map((token) => {
+      if (token.length <= 3 || /\d/.test(token)) return token
+      return token.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    })
+    .join(' ')
 }
 
 function normalizeVin(vin: string | null): string | null {
@@ -2856,6 +2867,14 @@ Each of these was found by probing the adapter with inputs the synthetic fixture
 ## Known limitations
 
 **Slug collisions are possible but fail safely.** `buildSlug` disambiguates with the last 8 characters of the source key. Two different VINs can theoretically share those 8 characters. If it happens, the unique index rejects the insert, the transaction rolls back, and the run is recorded as failed with last-good data intact — loud and safe, which is the correct direction to fail. Add a numeric suffix fallback only if it ever actually occurs.
+
+**`MAX_YEAR` is computed once at module load.** `normalize.ts` sets `MAX_YEAR = new Date().getFullYear() + 2` at import time, so the acceptable year ceiling is fixed for the life of the process rather than evaluated per call. On Vercel this is harmless — lambdas are short-lived and the ceiling is two years out — but it is a hidden time dependency, and any test that pins a year near the boundary will behave differently depending on when it runs. If this ever needs to be deterministic, pass the current year in rather than reading the clock inside the module.
+
+**`titleCase` preserves short tokens, and that cuts both ways.** It rewrites a value only when the whole string is uppercase, and then preserves any token of three characters or fewer, or containing a digit. This keeps automotive acronyms intact — LT, XLE, SLT, GMC, BMW, SUV, SR5, 4WD — which is the common case and the one that looks broken when wrong.
+
+The cost is that legitimately short English words are preserved too. `CREW CAB PICKUP` becomes `Crew CAB Pickup`, and `KIA` stays `KIA`. There is no length cutoff that fixes both: `CAB` and `SLT` are the same shape, so any rule producing `Cab` also produces `Slt`.
+
+Accepted deliberately rather than solved, for three reasons. It only triggers when a dealer types a field entirely in capitals. The failure is cosmetic and readable, unlike `Lt` or `Bmw`, which look like bugs. And we have not seen a single real Frazer record, so tuning casing rules now is guesswork — a hardcoded word list added on speculation is likelier to be wrong than the rule it replaces. **Revisit once the real feed lands and we know how the dealer actually types.**
 
 **`buildSlug` assumes a non-empty `sourceKey`, and that assumption is enforced upstream.** With an empty `sourceKey` and every other field null, the transform pipeline reduces to an empty string, which would break the URL and violate the unique index. Nothing in `slug.ts` guards against this. It is unreachable because `normalizeVehicle` (Task 6) returns `null` for any vehicle with neither VIN nor stock number, so a vehicle without a source key never reaches slug generation. If that guard is ever relaxed, `buildSlug` needs its own.
 
