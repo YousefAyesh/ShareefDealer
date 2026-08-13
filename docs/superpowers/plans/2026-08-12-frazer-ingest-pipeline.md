@@ -2347,7 +2347,12 @@ import type { ReconcilePlan } from './reconcile-plan'
  * enrichment. Structural typing means this passes to `planReconciliation`
  * unchanged.
  */
-export type ExistingVehicleRow = ExistingVehicle & { hasVinDecode: boolean }
+export type ExistingVehicleRow = ExistingVehicle & {
+  hasVinDecode: boolean
+  /** Photo rows currently stored. Compared against the feed's URL count to
+   *  detect a vehicle whose photo downloads previously failed. */
+  photoCount: number
+}
 
 export type SyncDeps = {
   adapter: FeedAdapter
@@ -2478,8 +2483,34 @@ export async function runSyncCore(deps: SyncDeps): Promise<SyncResult> {
   result.markedSold = counts.markedSold
   result.vehiclesSeen = plan.toCreate.length + plan.toUpdate.length + plan.unchangedIds.length
 
-  // 6. Photos. A failure for one vehicle never fails the run.
-  for (const v of enriched) {
+  // 7. Photos — only where needed. A failure for one vehicle never fails the run.
+  //
+  //    Two-part condition, and NEITHER HALF ALONE IS SUFFICIENT:
+  //
+  //    "changed" alone is not enough. photoUrls is part of the hashed field
+  //    set, so a vehicle whose downloads failed has an UNCHANGED hash next
+  //    run and would be skipped forever. A vehicle with zero photos is
+  //    excluded from listing pages entirely, so that car would silently
+  //    never appear on the site at all.
+  //
+  //    "incomplete" alone is not enough either — a vehicle whose photos were
+  //    swapped out has the same count as before.
+  //
+  //    Skipping the rest matters: syncPhotos costs two queries per vehicle,
+  //    so looping the whole feed is ~57,600 queries/day at 300 vehicles just
+  //    to discover nothing changed.
+  const storedPhotoCounts = new Map(existing.map((e) => [e.sourceKey, e.photoCount]))
+  const changedKeys = new Set([
+    ...plan.toCreate.map((v) => v.sourceKey),
+    ...plan.toUpdate.map((u) => u.vehicle.sourceKey),
+  ])
+
+  const needsPhotoSync = (v: CanonicalVehicle) =>
+    changedKeys.has(v.sourceKey) ||
+    (storedPhotoCounts.get(v.sourceKey) ?? 0) < v.photoUrls.length
+
+  for (const v of canonical) {
+    if (!needsPhotoSync(v)) continue
     try {
       result.photosProcessed += await deps.syncPhotos(v.sourceKey, v.photoUrls)
     } catch (err) {
@@ -2523,7 +2554,7 @@ The scheduled entry point that wires real IO into `runSyncCore`.
 Real dependency wiring, kept out of the route so the route stays trivial.
 
 ```typescript
-import { desc, eq, inArray, ne } from 'drizzle-orm'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import { syncRuns, vehicles, vehiclePhotos } from '@/db/schema'
 import { xmlAdapter } from './xml-adapter'
@@ -2569,6 +2600,10 @@ async function loadExisting(): Promise<ExistingVehicleRow[]> {
     status: vehicles.status,
     priceCents: vehicles.priceCents,
     vinDecoded: vehicles.vinDecoded,
+    photoCount: sql<number>`(
+      select count(*)::int from ${vehiclePhotos}
+      where ${vehiclePhotos.vehicleId} = ${vehicles.id}
+    )`,
   }).from(vehicles)
 
   return rows.map(({ vinDecoded, ...row }) => ({
