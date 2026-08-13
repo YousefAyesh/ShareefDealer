@@ -1712,9 +1712,11 @@ describe('processPhoto', () => {
   })
 
   it('reports the corrected full-size dimensions', async () => {
-    const out = await processPhoto(await plainJpeg(1600, 1200))
-    expect(out.width).toBe(PHOTO_SIZES.full)
-    expect(out.height).toBe(900)
+    // Source must exceed PHOTO_SIZES.full or the downscale path never runs.
+    // 3200x2400 is realistic — phones shoot around 4032x3024.
+    const out = await processPhoto(await plainJpeg(3200, 2400))
+    expect(out.width).toBe(PHOTO_SIZES.full)   // 1600
+    expect(out.height).toBe(1200)              // 4:3 preserved through the downscale
   })
 
   it('does not upscale an image smaller than the target', async () => {
@@ -1786,9 +1788,17 @@ export async function processPhoto(source: Buffer): Promise<ProcessedPhoto> {
     throw new Error('Unreadable image: no dimensions')
   }
 
+  // `.rotate()` is LAZY. metadata() on the un-executed pipeline reports the
+  // STORED dimensions plus a raw `orientation` field — not display dimensions.
+  // Using meta.width/height directly stores swapped dimensions for every
+  // portrait phone photo, so the site reserves wrong-shaped space and the
+  // layout shifts as images load. `autoOrient` reports true display size.
+  const displayWidth = meta.autoOrient?.width ?? meta.width
+  const displayHeight = meta.autoOrient?.height ?? meta.height
+
   const variants: PhotoVariant[] = []
   for (const name of Object.keys(PHOTO_SIZES) as PhotoVariantName[]) {
-    const target = Math.min(PHOTO_SIZES[name], meta.width)
+    const target = Math.min(PHOTO_SIZES[name], displayWidth)
     const buffer = await sharp(source)
       .rotate()
       .resize({ width: target, withoutEnlargement: true })
@@ -1797,8 +1807,8 @@ export async function processPhoto(source: Buffer): Promise<ProcessedPhoto> {
     variants.push({ name, buffer, width: target })
   }
 
-  const fullWidth = Math.min(PHOTO_SIZES.full, meta.width)
-  const fullHeight = Math.round((meta.height / meta.width) * fullWidth)
+  const fullWidth = Math.min(PHOTO_SIZES.full, displayWidth)
+  const fullHeight = Math.round((displayHeight / displayWidth) * fullWidth)
 
   return { contentHash, width: fullWidth, height: fullHeight, variants }
 }
@@ -2609,7 +2619,18 @@ async function syncPhotos(sourceKey: string, urls: string[]): Promise<number> {
   for (const item of plan.toFetch) {
     const buf = await fetchPhoto(item.url)
     if (!buf) continue                       // keep going; retried next run
-    const photo = await processPhoto(buf)
+
+    // fetchPhoto does not validate content type, so an HTML error page served
+    // with HTTP 200 arrives here as a "successful" download. processPhoto
+    // throws on it. Treat that exactly like a fetch failure — keep the
+    // existing photo, retry next run — or "degrade, never blank" breaks.
+    let photo
+    try {
+      photo = await processPhoto(buf)
+    } catch {
+      continue
+    }
+
     const uploaded = await uploadVariants(photo)
     await db.insert(vehiclePhotos).values({
       vehicleId: vehicle.id,
