@@ -2845,6 +2845,8 @@ The moment the dealer supplies the feed URL (intake question 24), do this **befo
 
 **Slug collisions are possible but fail safely.** `buildSlug` disambiguates with the last 8 characters of the source key. Two different VINs can theoretically share those 8 characters. If it happens, the unique index rejects the insert, the transaction rolls back, and the run is recorded as failed with last-good data intact — loud and safe, which is the correct direction to fail. Add a numeric suffix fallback only if it ever actually occurs.
 
+**`buildSlug` assumes a non-empty `sourceKey`, and that assumption is enforced upstream.** With an empty `sourceKey` and every other field null, the transform pipeline reduces to an empty string, which would break the URL and violate the unique index. Nothing in `slug.ts` guards against this. It is unreachable because `normalizeVehicle` (Task 6) returns `null` for any vehicle with neither VIN nor stock number, so a vehicle without a source key never reaches slug generation. If that guard is ever relaxed, `buildSlug` needs its own.
+
 **A vehicle can move between identity keys.** If a dealer saves a car with a blank VIN (keyed on stock number) and later fills the VIN in, the source key changes, so the old record is marked sold and a new one is created. This is rare and self-correcting, but it is why `sourceKeyType` is stored — it makes the situation diagnosable from the admin page instead of mysterious.
 
 ## What this plan deliberately leaves out
