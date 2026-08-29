@@ -1,10 +1,11 @@
 /**
  * Pure display formatters for vehicle data. No I/O, no DB access.
  *
- * BHPH shoppers buy on down payment and weekly payment, not sticker price.
  * These formatters never compute or estimate a number that isn't already on
- * the record -- a payment shown on the site is one the dealer is legally
- * held to.
+ * the record. A payment shown on a dealer site is one the dealer is legally
+ * held to, so formatPayment returns null unless the feed supplied both the
+ * down payment and the periodic payment -- it will not derive one from the
+ * other, or from the price.
  */
 
 export function formatPrice(cents: number | null | undefined): string {

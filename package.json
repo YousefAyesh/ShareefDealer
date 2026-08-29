@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "check:dealer": "node scripts/check-dealer.mjs",
+    "prebuild": "node scripts/check-dealer.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

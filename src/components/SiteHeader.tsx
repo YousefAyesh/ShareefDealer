@@ -1,11 +1,11 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { DEALER } from '@/lib/dealer'
+import { NavLink } from './NavLink'
 import { PhoneIcon, MenuIcon } from './icons'
 
 const NAV_LINKS = [
   { href: '/inventory', label: 'Inventory' },
-  { href: '/financing', label: 'Financing' },
   { href: '/visit', label: 'Visit Us' },
   { href: '/about', label: 'About' },
 ]
@@ -14,6 +14,11 @@ const NAV_LINKS = [
  * Cream/light surface header -- the logo is a JPEG with a cream background
  * baked in (no transparency), so it must sit on a cream surface, never
  * navy, or it looks like a pasted sticker.
+ *
+ * The phone number is in the header at every breakpoint, never collapsed
+ * into the hamburger. Calling is the primary conversion action for a used
+ * car lot, and a number a shopper has to open a menu to find is a number
+ * that doesn't get called.
  */
 export function SiteHeader() {
   return (
@@ -21,12 +26,12 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
         <Link
           href="/"
-          className="flex min-w-0 shrink-0 items-center gap-2 rounded-sm cursor-pointer"
+          className="flex min-w-0 shrink-0 cursor-pointer items-center gap-2 rounded-sm"
           aria-label={`${DEALER.name} — home`}
         >
           <Image
             src="/Logo.jpeg"
-            alt={`${DEALER.name} logo`}
+            alt=""
             width={56}
             height={56}
             priority
@@ -41,12 +46,13 @@ export function SiteHeader() {
           <ul className="flex items-center gap-6">
             {NAV_LINKS.map((link) => (
               <li key={link.href}>
-                <Link
+                <NavLink
                   href={link.href}
                   className="cursor-pointer text-sm font-semibold text-navy hover:text-red"
+                  activeClassName="text-red underline underline-offset-4"
                 >
                   {link.label}
-                </Link>
+                </NavLink>
               </li>
             ))}
           </ul>
@@ -82,12 +88,13 @@ export function SiteHeader() {
               <ul>
                 {NAV_LINKS.map((link) => (
                   <li key={link.href}>
-                    <Link
+                    <NavLink
                       href={link.href}
                       className="block cursor-pointer px-4 py-2.5 text-sm font-semibold text-navy hover:bg-navy/5"
+                      activeClassName="text-red"
                     >
                       {link.label}
-                    </Link>
+                    </NavLink>
                   </li>
                 ))}
               </ul>

@@ -1,184 +1,118 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { VehicleCard } from '@/components/VehicleCard'
+import { Suspense } from 'react'
+import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { EmptyState } from '@/components/EmptyState'
+import { InventorySkeleton } from '@/components/InventorySkeleton'
+import { FilterChips, InventoryFilters, Pagination, SortForm } from '@/components/InventoryFilters'
+import { JsonLd, breadcrumbJsonLd } from '@/components/JsonLd'
+import { VehicleCard } from '@/components/VehicleCard'
+import { DEALER, SITE_URL } from '@/lib/dealer'
 import { getFilterOptions, listVehicles } from '@/lib/inventory'
-import type { SortOption } from '@/lib/vehicle-types'
+import { activeFilterChips, parseSearchParams, type RawSearchParams } from '@/lib/search-params'
+import { hasActiveFilters as computeHasActiveFilters } from '@/lib/vehicle-filter'
+import type { VehicleFilters } from '@/lib/vehicle-types'
 
-export const metadata: Metadata = {
-  title: 'Inventory',
-  description: 'Browse the full lot at Roadstar Auto Sales in Austin, TX. Filter by make, body type, price and mileage.',
-}
+const TITLE = 'Inventory'
+const DESCRIPTION = `Browse every vehicle on the lot at ${DEALER.name} in ${DEALER.address.city}, ${DEALER.address.state}. Filter by make, model, year, price, mileage, body type and more.`
 
-type SearchParams = {
-  make?: string
-  body?: string
-  price_max?: string
-  mileage_max?: string
-  sort?: string
-}
-
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'newest', label: 'Newest Arrivals' },
-  { value: 'price_asc', label: 'Price: Low to High' },
-  { value: 'price_desc', label: 'Price: High to Low' },
-  { value: 'mileage_asc', label: 'Mileage: Low to High' },
+const CRUMBS = [
+  { name: 'Home', href: '/' },
+  { name: 'Inventory', href: '/inventory' },
 ]
 
-function isSortOption(value: string | undefined): value is SortOption {
-  return SORT_OPTIONS.some((o) => o.value === value)
-}
-
-export default async function InventoryPage({
+/**
+ * Canonical strategy for the listing.
+ *
+ * A filtered view (make=Ford, price_max=12000, a sort order) is the same
+ * inventory resliced, so it canonicalises to the bare /inventory and lets
+ * Google consolidate the whole facet space onto one URL. Deliberately no
+ * `noindex` alongside that canonical: the two are conflicting instructions
+ * -- the canonical says "index the target instead", the noindex says "index
+ * nothing here" -- and Google's faceted-navigation guidance is to pick the
+ * canonical. Combining them risks the noindex propagating to the canonical
+ * target, which would drop the real inventory page out of the index.
+ *
+ * Pagination is different: page 2 is genuinely different vehicles, not a
+ * reslice of page 1, so each page self-canonicalises and stays indexable.
+ * The pager emits rel="prev"/rel="next" to tie the sequence together.
+ */
+export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Promise<SearchParams>
-}) {
-  const params = await searchParams
-  const sort: SortOption = isSortOption(params.sort) ? params.sort : 'newest'
-  const priceMaxDollars = params.price_max ? Number(params.price_max) : undefined
-  const mileageMax = params.mileage_max ? Number(params.mileage_max) : undefined
+  searchParams: Promise<RawSearchParams>
+}): Promise<Metadata> {
+  const filters = parseSearchParams(await searchParams)
+  const isFiltered = computeHasActiveFilters(filters)
 
-  const filters = {
-    make: params.make || undefined,
-    bodyStyle: params.body || undefined,
-    maxPriceCents:
-      priceMaxDollars != null && Number.isFinite(priceMaxDollars) ? Math.round(priceMaxDollars * 100) : undefined,
-    maxMileage: mileageMax != null && Number.isFinite(mileageMax) ? Math.round(mileageMax) : undefined,
-    sort,
+  // Use the *clamped* page, not the requested one: ?page=9 on a two-page
+  // lot renders page 2, and canonicalising it to a page that does not exist
+  // would point Google at a URL that redirects back to this content. The
+  // vehicle read behind this is request-memoized, so it costs no extra
+  // query on top of the render below.
+  const { page } = await listVehicles(filters)
+
+  const canonicalPath = isFiltered
+    ? '/inventory'
+    : page > 1
+      ? `/inventory?page=${page}`
+      : '/inventory'
+
+  return {
+    title: page > 1 && !isFiltered ? `${TITLE} — Page ${page}` : TITLE,
+    description: DESCRIPTION,
+    alternates: { canonical: `${SITE_URL}${canonicalPath}` },
   }
+}
 
-  const hasActiveFilters = Boolean(filters.make || filters.bodyStyle || filters.maxPriceCents || filters.maxMileage)
+/**
+ * The parts that need data. Split out so the page shell -- breadcrumbs,
+ * heading -- renders immediately and only this streams in behind a
+ * skeleton.
+ */
+async function InventoryResults({ filters }: { filters: VehicleFilters }) {
+  const hasFilters = computeHasActiveFilters(filters)
+  const [result, options] = await Promise.all([listVehicles(filters), getFilterOptions(filters)])
+  const chips = activeFilterChips(filters)
 
-  const [vehicles, filterOptions, allAvailable] = await Promise.all([
-    listVehicles(filters),
-    getFilterOptions(),
-    hasActiveFilters ? listVehicles({}) : Promise.resolve(null),
-  ])
+  // Two genuinely different empty states. "Nothing on the lot" is a
+  // business fact and the shopper should call; "nothing matches" is the
+  // shopper's own filters and they should widen them. Telling someone to
+  // call when the real problem is their $3,000 price cap wastes everyone's
+  // time.
+  const lotIsEmpty = options.totalListable === 0
 
-  // Two distinct empty states: the lot itself is empty (no inventory at
-  // all), vs. filters simply don't match anything currently on the lot.
-  const lotIsEmpty = hasActiveFilters ? allAvailable?.length === 0 : vehicles.length === 0
+  const rangeStart = (result.page - 1) * result.pageSize + 1
+  const rangeEnd = Math.min(result.page * result.pageSize, result.total)
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-3xl uppercase tracking-tight text-navy">Inventory</h1>
+    <>
+      <p className="-mt-4 mb-6 text-navy/70">
+        {lotIsEmpty
+          ? 'Restocking now — new arrivals on the way.'
+          : `${options.totalListable} ${options.totalListable === 1 ? 'vehicle' : 'vehicles'} on the lot right now.`}
+      </p>
 
-      <form method="get" action="/inventory" className="mt-6 grid grid-cols-2 gap-3 rounded-lg border border-navy/10 bg-white/40 p-4 sm:grid-cols-4 sm:gap-4">
-        <label className="flex flex-col gap-1 text-sm font-semibold text-navy">
-          Make
-          <select
-            name="make"
-            defaultValue={params.make || ''}
-            className="min-h-11 cursor-pointer rounded-md border border-navy/20 bg-cream px-2 text-sm text-navy"
-          >
-            <option value="">Any make</option>
-            {filterOptions.makes.map((make) => (
-              <option key={make} value={make}>
-                {make}
-              </option>
-            ))}
-          </select>
-        </label>
+      <InventoryFilters filters={filters} options={options} hasActiveFilters={hasFilters} />
 
-        <label className="flex flex-col gap-1 text-sm font-semibold text-navy">
-          Body type
-          <select
-            name="body"
-            defaultValue={params.body || ''}
-            className="min-h-11 cursor-pointer rounded-md border border-navy/20 bg-cream px-2 text-sm text-navy"
-          >
-            <option value="">Any body type</option>
-            {filterOptions.bodyStyles.map((body) => (
-              <option key={body} value={body}>
-                {body}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-semibold text-navy">
-          Max price
-          <input
-            type="number"
-            name="price_max"
-            min={0}
-            step={500}
-            placeholder="Any price"
-            defaultValue={params.price_max || ''}
-            className="min-h-11 rounded-md border border-navy/20 bg-cream px-2 text-sm text-navy"
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-semibold text-navy">
-          Max mileage
-          <input
-            type="number"
-            name="mileage_max"
-            min={0}
-            step={5000}
-            placeholder="Any mileage"
-            defaultValue={params.mileage_max || ''}
-            className="min-h-11 rounded-md border border-navy/20 bg-cream px-2 text-sm text-navy"
-          />
-        </label>
-
-        <div className="col-span-2 flex items-end gap-2 sm:col-span-4">
-          <button
-            type="submit"
-            className="min-h-11 cursor-pointer rounded-md bg-red px-5 text-sm font-bold text-cream hover:bg-red-dark"
-          >
-            Apply Filters
-          </button>
-          {hasActiveFilters && (
-            <Link
-              href="/inventory"
-              className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-navy/70 hover:text-red"
-            >
-              Clear all
-            </Link>
-          )}
+      {chips.length > 0 && (
+        <div className="mt-4">
+          <FilterChips chips={chips} />
         </div>
-      </form>
+      )}
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-semibold text-navy/80">
-          {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} found
+        <p className="text-sm font-semibold text-navy/80" role="status">
+          {result.total === 0
+            ? 'No vehicles found'
+            : `Showing ${rangeStart}–${rangeEnd} of ${result.total} ${result.total === 1 ? 'vehicle' : 'vehicles'}`}
         </p>
-
-        <form method="get" action="/inventory" className="flex items-center gap-2 text-sm">
-          {params.make && <input type="hidden" name="make" value={params.make} />}
-          {params.body && <input type="hidden" name="body" value={params.body} />}
-          {params.price_max && <input type="hidden" name="price_max" value={params.price_max} />}
-          {params.mileage_max && <input type="hidden" name="mileage_max" value={params.mileage_max} />}
-          <label htmlFor="sort" className="font-semibold text-navy/80">
-            Sort
-          </label>
-          <select
-            id="sort"
-            name="sort"
-            defaultValue={sort}
-            className="min-h-11 cursor-pointer rounded-md border border-navy/20 bg-cream px-2 text-navy"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="min-h-11 cursor-pointer rounded-md border border-navy/20 px-3 font-semibold text-navy hover:border-navy"
-          >
-            Go
-          </button>
-        </form>
+        {result.total > 0 && <SortForm filters={filters} />}
       </div>
 
       <div className="mt-6">
-        {vehicles.length > 0 ? (
+        {result.vehicles.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {vehicles.map((vehicle) => (
+            {result.vehicles.map((vehicle) => (
               <VehicleCard key={vehicle.id} vehicle={vehicle} />
             ))}
           </div>
@@ -191,11 +125,44 @@ export default async function InventoryPage({
         ) : (
           <EmptyState
             title="No vehicles match those filters"
-            message="Try widening your price or mileage range, or clear all filters to see the full lot."
+            message="Try widening your price or mileage range, or clear the filters to see the full lot."
             action={{ href: '/inventory', label: 'Clear filters' }}
           />
         )}
       </div>
+
+      <Pagination filters={filters} page={result.page} pageCount={result.pageCount} />
+    </>
+  )
+}
+
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>
+}) {
+  const filters = parseSearchParams(await searchParams)
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <JsonLd data={breadcrumbJsonLd(CRUMBS)} />
+      <Breadcrumbs crumbs={CRUMBS} />
+
+      <h1 className="mt-3 mb-6 font-display text-3xl uppercase tracking-tight text-navy">Inventory</h1>
+
+      {/* Keyed on the filters so changing them shows the skeleton again
+          rather than leaving the previous results on screen. */}
+      <Suspense key={JSON.stringify(filters)} fallback={<InventorySkeleton />}>
+        <InventoryResults filters={filters} />
+      </Suspense>
+
+      {/* FTC "clear and conspicuous" wants pricing qualifiers near the
+          price, not buried in a footer. This repeats the per-vehicle
+          disclaimer at the bottom of the list view. */}
+      <p className="mt-8 text-xs text-navy/60">
+        All prices exclude tax, title, license and dealer fees. Vehicles subject to prior sale. Mileage
+        and equipment are believed accurate but not guaranteed — verify with us before purchase.
+      </p>
     </div>
   )
 }

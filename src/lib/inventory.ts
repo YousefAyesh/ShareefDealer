@@ -9,103 +9,52 @@
  * through the function bodies, so it's trivial to delete once the Frazer
  * feed is live: delete the `if` lines, delete demo-inventory.ts, done.
  *
+ * All filtering, sorting, faceting and pagination lives in the pure
+ * vehicle-filter module, which both paths call. This module's only job is
+ * getting rows out of somewhere and handing them over.
+ *
  * Minimum-photo guard (see docs/superpowers/specs/2026-08-12-dealership-
  * site-design.md §4.7): a vehicle with zero photos never appears on a
  * listing page, and its VDP is treated as not found. It stays ingested so
  * it appears automatically the moment the dealer adds a photo.
  */
+import { cache } from 'react'
 import { asc, eq, inArray, ne } from 'drizzle-orm'
 import { db } from '@/db'
 import { vehiclePhotos, vehicles as vehiclesTable } from '@/db/schema'
 import { DEMO_VEHICLES } from './demo-inventory'
-import type { FilterOptions, SortOption, Vehicle, VehicleFilters, VehiclePhoto } from './vehicle-types'
+import {
+  buildFilterOptions,
+  isPubliclyListable,
+  matchesFilters,
+  paginate,
+  pickSimilar,
+  sortVehicles,
+} from './vehicle-filter'
+import type {
+  FilterOptions,
+  InventoryPage,
+  Vehicle,
+  VehicleFilters,
+  VehiclePhoto,
+} from './vehicle-types'
 
 function isDemoMode(): boolean {
   return process.env.DEMO_MODE === 'true'
 }
 
-// ---------------------------------------------------------------------------
-// Shared, pure logic -- used by both the demo path and the real Postgres
-// path so filtering/sorting/similarity behave identically no matter where
-// the data came from.
-// ---------------------------------------------------------------------------
-
-function isPubliclyListable(v: Vehicle): boolean {
-  return v.status === 'available' && v.photos.length > 0
-}
-
-function matchesFilters(v: Vehicle, filters: VehicleFilters): boolean {
-  if (filters.make && v.make?.toLowerCase() !== filters.make.toLowerCase()) return false
-  if (filters.bodyStyle && v.bodyStyle?.toLowerCase() !== filters.bodyStyle.toLowerCase()) return false
-  if (filters.maxPriceCents != null) {
-    if (v.priceCents == null || v.priceCents > filters.maxPriceCents) return false
-  }
-  if (filters.maxMileage != null) {
-    if (v.mileage == null || v.mileage > filters.maxMileage) return false
-  }
-  return true
-}
-
-function comparePrice(a: Vehicle, b: Vehicle, dir: 1 | -1): number {
-  // "Call for Price" (null) vehicles always sort last, in either direction --
-  // there's no meaningful position for an unknown price in a price-ordered
-  // list.
-  if (a.priceCents == null && b.priceCents == null) return 0
-  if (a.priceCents == null) return 1
-  if (b.priceCents == null) return -1
-  return dir * (a.priceCents - b.priceCents)
-}
-
-function compareMileage(a: Vehicle, b: Vehicle): number {
-  if (a.mileage == null && b.mileage == null) return 0
-  if (a.mileage == null) return 1
-  if (b.mileage == null) return -1
-  return a.mileage - b.mileage
-}
-
-function sortVehicles(list: Vehicle[], sort: SortOption = 'newest'): Vehicle[] {
-  const arr = [...list]
-  switch (sort) {
-    case 'price_asc':
-      return arr.sort((a, b) => comparePrice(a, b, 1))
-    case 'price_desc':
-      return arr.sort((a, b) => comparePrice(a, b, -1))
-    case 'mileage_asc':
-      return arr.sort(compareMileage)
-    case 'newest':
-    default:
-      return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }
-}
-
-function pickSimilar(all: Vehicle[], vehicle: Vehicle, limit: number): Vehicle[] {
-  const candidates = all.filter((v) => v.id !== vehicle.id && isPubliclyListable(v))
-  const scored = candidates.map((v) => {
-    let score = 0
-    if (v.bodyStyle && v.bodyStyle === vehicle.bodyStyle) score += 2
-    if (v.make && v.make === vehicle.make) score += 1
-    return { v, score }
-  })
-  scored.sort((a, b) => b.score - a.score || new Date(b.v.createdAt).getTime() - new Date(a.v.createdAt).getTime())
-  return scored.slice(0, limit).map((s) => s.v)
-}
-
-function buildFilterOptions(all: Vehicle[]): FilterOptions {
-  const listable = all.filter(isPubliclyListable)
-  const makes = Array.from(new Set(listable.map((v) => v.make).filter((m): m is string => Boolean(m)))).sort()
-  const bodyStyles = Array.from(
-    new Set(listable.map((v) => v.bodyStyle).filter((b): b is string => Boolean(b))),
-  ).sort()
-  return { makes, bodyStyles }
+/** Filter, sort and slice one page out of a full vehicle set. */
+function selectPage(all: Vehicle[], filters: VehicleFilters): InventoryPage {
+  const matching = all.filter((v) => isPubliclyListable(v) && matchesFilters(v, filters))
+  return paginate(sortVehicles(matching, filters.sort), filters.page)
 }
 
 // ---------------------------------------------------------------------------
 // Demo path -- reads from the hand-written module, never touches Postgres.
 // ---------------------------------------------------------------------------
 
-function demoListVehicles(filters: VehicleFilters): Vehicle[] {
-  const matching = DEMO_VEHICLES.filter((v) => isPubliclyListable(v) && matchesFilters(v, filters))
-  return sortVehicles(matching, filters.sort)
+function demoListVehicles(filters: VehicleFilters): InventoryPage {
+  return selectPage(DEMO_VEHICLES, filters)
 }
 
 function demoGetVehicleBySlug(slug: string): Vehicle | null {
@@ -124,8 +73,8 @@ function demoGetSimilarVehicles(vehicle: Vehicle, limit: number): Vehicle[] {
   return pickSimilar(DEMO_VEHICLES, vehicle, limit)
 }
 
-function demoGetFilterOptions(): FilterOptions {
-  return buildFilterOptions(DEMO_VEHICLES)
+function demoGetFilterOptions(filters: VehicleFilters): FilterOptions {
+  return buildFilterOptions(DEMO_VEHICLES, filters)
 }
 
 // ---------------------------------------------------------------------------
@@ -187,20 +136,24 @@ function rowsToVehicles(vehicleRows: VehicleRow[], photoRows: PhotoRow[]): Vehic
   }))
 }
 
-/** Every non-hidden vehicle, with photos attached. Hidden vehicles are an
- * admin-only override and are never fetched for the public site. */
-async function fetchPublicVehicles(): Promise<Vehicle[]> {
+/**
+ * Every non-hidden vehicle, with photos attached. Hidden vehicles are an
+ * admin-only override and are never fetched for the public site.
+ *
+ * Wrapped in React's `cache` so that rendering one inventory page -- which
+ * needs the vehicle list, the facet counts and the unfiltered total --
+ * reads the table once rather than three times.
+ */
+const fetchPublicVehicles = cache(async function fetchPublicVehicles(): Promise<Vehicle[]> {
   const vehicleRows = await db.select().from(vehiclesTable).where(ne(vehiclesTable.status, 'hidden'))
   if (vehicleRows.length === 0) return []
   const ids = vehicleRows.map((v) => v.id)
   const photoRows = await db.select().from(vehiclePhotos).where(inArray(vehiclePhotos.vehicleId, ids))
   return rowsToVehicles(vehicleRows, photoRows)
-}
+})
 
-async function dbListVehicles(filters: VehicleFilters): Promise<Vehicle[]> {
-  const all = await fetchPublicVehicles()
-  const matching = all.filter((v) => isPubliclyListable(v) && matchesFilters(v, filters))
-  return sortVehicles(matching, filters.sort)
+async function dbListVehicles(filters: VehicleFilters): Promise<InventoryPage> {
+  return selectPage(await fetchPublicVehicles(), filters)
 }
 
 async function dbGetVehicleBySlug(slug: string): Promise<Vehicle | null> {
@@ -227,24 +180,30 @@ async function dbGetSimilarVehicles(vehicle: Vehicle, limit: number): Promise<Ve
   return pickSimilar(all, vehicle, limit)
 }
 
-async function dbGetFilterOptions(): Promise<FilterOptions> {
-  const all = await fetchPublicVehicles()
-  return buildFilterOptions(all)
+async function dbGetFilterOptions(filters: VehicleFilters): Promise<FilterOptions> {
+  return buildFilterOptions(await fetchPublicVehicles(), filters)
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function listVehicles(filters: VehicleFilters = {}): Promise<Vehicle[]> {
+export async function listVehicles(filters: VehicleFilters = {}): Promise<InventoryPage> {
   if (isDemoMode()) return demoListVehicles(filters)
   return dbListVehicles(filters)
 }
 
-export async function getVehicleBySlug(slug: string): Promise<Vehicle | null> {
+/**
+ * Memoized per request: the vehicle page looks a slug up twice, once in
+ * generateMetadata and once in the component, and without this that is two
+ * round trips to Postgres for the same row on every vehicle view.
+ */
+export const getVehicleBySlug = cache(async function getVehicleBySlug(
+  slug: string,
+): Promise<Vehicle | null> {
   if (isDemoMode()) return demoGetVehicleBySlug(slug)
   return dbGetVehicleBySlug(slug)
-}
+})
 
 export async function getNewestArrivals(limit = 6): Promise<Vehicle[]> {
   if (isDemoMode()) return demoGetNewestArrivals(limit)
@@ -256,9 +215,31 @@ export async function getSimilarVehicles(vehicle: Vehicle, limit = 3): Promise<V
   return dbGetSimilarVehicles(vehicle, limit)
 }
 
-export async function getFilterOptions(): Promise<FilterOptions> {
-  if (isDemoMode()) return demoGetFilterOptions()
-  return dbGetFilterOptions()
+/**
+ * Facet counts are computed against the currently active filters, so the
+ * caller must pass them in -- see buildFilterOptions for why the counts
+ * exclude each field's own filter.
+ */
+export async function getFilterOptions(filters: VehicleFilters = {}): Promise<FilterOptions> {
+  if (isDemoMode()) return demoGetFilterOptions(filters)
+  return dbGetFilterOptions(filters)
 }
 
-export type { FilterOptions, SortOption, Vehicle, VehicleFilters, VehiclePhoto } from './vehicle-types'
+/**
+ * Slug + last-modified for every publicly listable vehicle. Used only by
+ * the sitemap, which needs every URL rather than one page of them.
+ */
+export async function getAllListableVehicles(): Promise<Vehicle[]> {
+  const all = isDemoMode() ? DEMO_VEHICLES : await fetchPublicVehicles()
+  return sortVehicles(all.filter(isPubliclyListable), 'newest')
+}
+
+export type {
+  FacetValue,
+  FilterOptions,
+  InventoryPage,
+  SortOption,
+  Vehicle,
+  VehicleFilters,
+  VehiclePhoto,
+} from './vehicle-types'
