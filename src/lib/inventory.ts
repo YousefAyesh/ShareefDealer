@@ -1,28 +1,27 @@
 /**
- * The real data-access layer for the public site. Every exported function
- * starts with the same shape:
+ * The data layer for the public site: reads the checked-in inventory files.
  *
- *   if (isDemoMode()) return demoXxx(...)
- *   ...real Postgres query via Drizzle...
+ * There is no database and no external service. A vehicle is one JSON file
+ * in inventory/, its photos are the images in public/inventory/<slug>/, and
+ * the slug is the filename. Adding a car is adding a file; removing one is
+ * removing a file; both are ordinary commits with an ordinary diff, and the
+ * whole state of the lot is readable without running anything.
  *
- * That single `if` is the entire demo branch -- deliberately not scattered
- * through the function bodies, so it's trivial to delete once the Frazer
- * feed is live: delete the `if` lines, delete demo-inventory.ts, done.
+ * That is a deliberate trade. A synced feed keeps itself current and this
+ * does not -- the site is exactly as fresh as the last commit. In exchange
+ * there is nothing to provision, nothing to pay for, nothing with
+ * credentials that can expire, and no state that can drift out of step with
+ * what is on the screen. For a lot of a few dozen cars updated by hand, that
+ * is the better end of the trade.
  *
  * All filtering, sorting, faceting and pagination lives in the pure
- * vehicle-filter module, which both paths call. This module's only job is
- * getting rows out of somewhere and handing them over.
- *
- * Minimum-photo guard (see docs/superpowers/specs/2026-08-12-dealership-
- * site-design.md §4.7): a vehicle with zero photos never appears on a
- * listing page, and its VDP is treated as not found. It stays ingested so
- * it appears automatically the moment the dealer adds a photo.
+ * vehicle-filter module. This module's only job is turning files into
+ * `Vehicle` objects.
  */
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { cache } from 'react'
-import { asc, eq, inArray, ne } from 'drizzle-orm'
-import { db } from '@/db'
-import { vehiclePhotos, vehicles as vehiclesTable } from '@/db/schema'
-import { DEMO_VEHICLES } from './demo-inventory'
+import { parseVehicleFile, type VehicleFile } from './inventory-schema'
 import {
   buildFilterOptions,
   isPubliclyListable,
@@ -39,149 +38,151 @@ import type {
   VehiclePhoto,
 } from './vehicle-types'
 
-function isDemoMode(): boolean {
-  return process.env.DEMO_MODE === 'true'
-}
+const INVENTORY_DIR = join(process.cwd(), 'inventory')
+const PHOTO_DIR = join(process.cwd(), 'public', 'inventory')
 
-/** Filter, sort and slice one page out of a full vehicle set. */
-function selectPage(all: Vehicle[], filters: VehicleFilters): InventoryPage {
-  const matching = all.filter((v) => isPubliclyListable(v) && matchesFilters(v, filters))
-  return paginate(sortVehicles(matching, filters.sort), filters.page)
-}
+/**
+ * Every photo is normalised to exactly this by scripts/photos.mjs, so the
+ * dimensions are known without opening the files. Keep these two numbers in
+ * step with the WIDTH/HEIGHT constants in that script.
+ */
+const PHOTO_WIDTH = 1600
+const PHOTO_HEIGHT = 1200
 
-// ---------------------------------------------------------------------------
-// Demo path -- reads from the hand-written module, never touches Postgres.
-// ---------------------------------------------------------------------------
-
-function demoListVehicles(filters: VehicleFilters): InventoryPage {
-  return selectPage(DEMO_VEHICLES, filters)
-}
-
-function demoGetVehicleBySlug(slug: string): Vehicle | null {
-  const found = DEMO_VEHICLES.find((v) => v.slug === slug)
-  if (!found) return null
-  if (found.status === 'hidden') return null
-  if (found.photos.length === 0) return null
-  return found
-}
-
-function demoGetNewestArrivals(limit: number): Vehicle[] {
-  return sortVehicles(DEMO_VEHICLES.filter(isPubliclyListable), 'newest').slice(0, limit)
-}
-
-function demoGetSimilarVehicles(vehicle: Vehicle, limit: number): Vehicle[] {
-  return pickSimilar(DEMO_VEHICLES, vehicle, limit)
-}
-
-function demoGetFilterOptions(filters: VehicleFilters): FilterOptions {
-  return buildFilterOptions(DEMO_VEHICLES, filters)
-}
-
-// ---------------------------------------------------------------------------
-// Real path -- Postgres via the Drizzle setup in src/db.
-// ---------------------------------------------------------------------------
-
-type VehicleRow = typeof vehiclesTable.$inferSelect
-type PhotoRow = typeof vehiclePhotos.$inferSelect
-
-function rowToPhoto(p: PhotoRow): VehiclePhoto {
-  return {
-    id: p.id,
-    position: p.position,
-    urlThumb: p.urlThumb,
-    urlCard: p.urlCard,
-    urlFull: p.urlFull,
-    width: p.width,
-    height: p.height,
-    alt: p.alt,
-  }
-}
-
-function rowsToVehicles(vehicleRows: VehicleRow[], photoRows: PhotoRow[]): Vehicle[] {
-  const photosByVehicle = new Map<string, PhotoRow[]>()
-  for (const p of photoRows) {
-    const list = photosByVehicle.get(p.vehicleId) ?? []
-    list.push(p)
-    photosByVehicle.set(p.vehicleId, list)
-  }
-
-  return vehicleRows.map((v) => ({
-    id: v.id,
-    slug: v.slug,
-    vin: v.vin,
-    stockNumber: v.stockNumber,
-    year: v.year,
-    make: v.make,
-    model: v.model,
-    trim: v.trim,
-    bodyStyle: v.bodyStyle,
-    drivetrain: v.drivetrain,
-    transmission: v.transmission,
-    engine: v.engine,
-    fuelType: v.fuelType,
-    doors: v.doors,
-    exteriorColor: v.exteriorColor,
-    interiorColor: v.interiorColor,
-    mileage: v.mileage,
-    priceCents: v.priceCents,
-    downPaymentCents: v.downPaymentCents,
-    weeklyPaymentCents: v.weeklyPaymentCents,
-    description: v.description,
-    features: v.features,
-    status: v.status,
-    priceReduced: v.priceReduced,
-    photos: (photosByVehicle.get(v.id) ?? []).sort((a, b) => a.position - b.position).map(rowToPhoto),
-    createdAt: v.createdAt.toISOString(),
-    soldAt: v.soldAt ? v.soldAt.toISOString() : null,
-  }))
+function titleOf(v: VehicleFile): string {
+  return [v.year, v.make, v.model, v.trim].filter(Boolean).join(' ')
 }
 
 /**
- * Every non-hidden vehicle, with photos attached. Hidden vehicles are an
- * admin-only override and are never fetched for the public site.
- *
- * Wrapped in React's `cache` so that rendering one inventory page -- which
- * needs the vehicle list, the facet counts and the unfiltered total --
- * reads the table once rather than three times.
+ * The photos for a vehicle, in filename order -- 01.webp first, and that
+ * one is the listing card image. A vehicle whose folder is missing or empty
+ * gets no photos, and vehicle-filter's isPubliclyListable then keeps it off
+ * every listing page: a car nobody can see a picture of is not a car anyone
+ * calls about.
  */
-const fetchPublicVehicles = cache(async function fetchPublicVehicles(): Promise<Vehicle[]> {
-  const vehicleRows = await db.select().from(vehiclesTable).where(ne(vehiclesTable.status, 'hidden'))
-  if (vehicleRows.length === 0) return []
-  const ids = vehicleRows.map((v) => v.id)
-  const photoRows = await db.select().from(vehiclePhotos).where(inArray(vehiclePhotos.vehicleId, ids))
-  return rowsToVehicles(vehicleRows, photoRows)
+function readPhotos(slug: string, title: string): VehiclePhoto[] {
+  const dir = join(PHOTO_DIR, slug)
+  if (!existsSync(dir)) return []
+
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.webp'))
+    .sort()
+    .map((file, position) => {
+      const url = `/inventory/${slug}/${file}`
+      return {
+        id: `${slug}-${position}`,
+        position,
+        // One file per photo. next/image derives the smaller sizes it needs
+        // at request time and caches them, so there is no reason to store
+        // three copies of every picture in git.
+        urlThumb: url,
+        urlCard: url,
+        urlFull: url,
+        width: PHOTO_WIDTH,
+        height: PHOTO_HEIGHT,
+        alt: `${title} — photo ${position + 1}`,
+      }
+    })
+}
+
+function toVehicle(slug: string, file: VehicleFile, listedAt: string): Vehicle {
+  const title = titleOf(file)
+  // Dollars in the file, cents everywhere inside the site.
+  const cents = (dollars: number | undefined) => (dollars == null ? null : dollars * 100)
+
+  return {
+    id: slug,
+    slug,
+    vin: file.vin ?? null,
+    stockNumber: file.stockNumber ?? null,
+    year: file.year,
+    make: file.make,
+    model: file.model,
+    trim: file.trim ?? null,
+    bodyStyle: file.bodyStyle ?? null,
+    drivetrain: file.drivetrain ?? null,
+    transmission: file.transmission ?? null,
+    engine: file.engine ?? null,
+    fuelType: file.fuelType ?? null,
+    doors: file.doors ?? null,
+    exteriorColor: file.exteriorColor ?? null,
+    interiorColor: file.interiorColor ?? null,
+    mileage: file.mileage ?? null,
+    priceCents: cents(file.price),
+    downPaymentCents: cents(file.downPayment),
+    weeklyPaymentCents: cents(file.weeklyPayment),
+    description: file.description ?? null,
+    features: file.features ?? [],
+    status: file.status ?? 'available',
+    priceReduced: file.priceReduced ?? false,
+    photos: readPhotos(slug, title),
+    createdAt: listedAt,
+    soldAt: null,
+  }
+}
+
+export type InventoryProblem = { file: string; errors: string[] }
+
+/**
+ * Read and validate every inventory file. Invalid files are reported and
+ * skipped rather than thrown, so one malformed car cannot take the whole
+ * site down -- `npm run check:inventory` is what turns the same problems
+ * into a failed build, before anything reaches production.
+ */
+export function loadInventory(): { vehicles: Vehicle[]; problems: InventoryProblem[] } {
+  if (!existsSync(INVENTORY_DIR)) return { vehicles: [], problems: [] }
+
+  const vehicles: Vehicle[] = []
+  const problems: InventoryProblem[] = []
+
+  for (const filename of readdirSync(INVENTORY_DIR).sort()) {
+    if (!filename.endsWith('.json')) continue
+    const slug = filename.slice(0, -'.json'.length)
+    const path = join(INVENTORY_DIR, filename)
+
+    let raw: unknown
+    try {
+      raw = JSON.parse(readFileSync(path, 'utf8'))
+    } catch (error) {
+      problems.push({
+        file: filename,
+        errors: [`not valid JSON — ${(error as Error).message}`],
+      })
+      continue
+    }
+
+    const parsed = parseVehicleFile(raw)
+    if (!parsed.ok) {
+      problems.push({ file: filename, errors: parsed.errors })
+      continue
+    }
+
+    // listedAt drives "newest arrivals". Falling back to the file's own
+    // modified time means a car added without one still sorts sensibly
+    // instead of landing at the epoch, at the cost of moving up the list
+    // when edited -- which is why the schema asks for it explicitly.
+    const listedAt = parsed.value.listedAt
+      ? new Date(`${parsed.value.listedAt}T12:00:00Z`).toISOString()
+      : statSync(path).mtime.toISOString()
+
+    vehicles.push(toVehicle(slug, parsed.value, listedAt))
+  }
+
+  return { vehicles, problems }
+}
+
+/** Memoized for the duration of one request. */
+const allVehicles = cache(function allVehicles(): Vehicle[] {
+  const { vehicles, problems } = loadInventory()
+  for (const problem of problems) {
+    console.error(`inventory/${problem.file} skipped:\n  - ${problem.errors.join('\n  - ')}`)
+  }
+  return vehicles
 })
 
-async function dbListVehicles(filters: VehicleFilters): Promise<InventoryPage> {
-  return selectPage(await fetchPublicVehicles(), filters)
-}
-
-async function dbGetVehicleBySlug(slug: string): Promise<Vehicle | null> {
-  const rows = await db.select().from(vehiclesTable).where(eq(vehiclesTable.slug, slug)).limit(1)
-  const row = rows[0]
-  if (!row || row.status === 'hidden') return null
-  const photoRows = await db
-    .select()
-    .from(vehiclePhotos)
-    .where(eq(vehiclePhotos.vehicleId, row.id))
-    .orderBy(asc(vehiclePhotos.position))
-  const [vehicle] = rowsToVehicles([row], photoRows)
-  if (!vehicle || vehicle.photos.length === 0) return null
-  return vehicle
-}
-
-async function dbGetNewestArrivals(limit: number): Promise<Vehicle[]> {
-  const all = await fetchPublicVehicles()
-  return sortVehicles(all.filter(isPubliclyListable), 'newest').slice(0, limit)
-}
-
-async function dbGetSimilarVehicles(vehicle: Vehicle, limit: number): Promise<Vehicle[]> {
-  const all = await fetchPublicVehicles()
-  return pickSimilar(all, vehicle, limit)
-}
-
-async function dbGetFilterOptions(filters: VehicleFilters): Promise<FilterOptions> {
-  return buildFilterOptions(await fetchPublicVehicles(), filters)
+function selectPage(all: Vehicle[], filters: VehicleFilters): InventoryPage {
+  const matching = all.filter((v) => isPubliclyListable(v) && matchesFilters(v, filters))
+  return paginate(sortVehicles(matching, filters.sort), filters.page)
 }
 
 // ---------------------------------------------------------------------------
@@ -189,30 +190,27 @@ async function dbGetFilterOptions(filters: VehicleFilters): Promise<FilterOption
 // ---------------------------------------------------------------------------
 
 export async function listVehicles(filters: VehicleFilters = {}): Promise<InventoryPage> {
-  if (isDemoMode()) return demoListVehicles(filters)
-  return dbListVehicles(filters)
+  return selectPage(allVehicles(), filters)
 }
 
-/**
- * Memoized per request: the vehicle page looks a slug up twice, once in
- * generateMetadata and once in the component, and without this that is two
- * round trips to Postgres for the same row on every vehicle view.
- */
 export const getVehicleBySlug = cache(async function getVehicleBySlug(
   slug: string,
 ): Promise<Vehicle | null> {
-  if (isDemoMode()) return demoGetVehicleBySlug(slug)
-  return dbGetVehicleBySlug(slug)
+  const found = allVehicles().find((v) => v.slug === slug)
+  if (!found) return null
+  // Hidden is an explicit "not on the site"; no photos means there is
+  // nothing to show. Both are 404 rather than a broken-looking page.
+  if (found.status === 'hidden') return null
+  if (found.photos.length === 0) return null
+  return found
 })
 
 export async function getNewestArrivals(limit = 6): Promise<Vehicle[]> {
-  if (isDemoMode()) return demoGetNewestArrivals(limit)
-  return dbGetNewestArrivals(limit)
+  return sortVehicles(allVehicles().filter(isPubliclyListable), 'newest').slice(0, limit)
 }
 
 export async function getSimilarVehicles(vehicle: Vehicle, limit = 3): Promise<Vehicle[]> {
-  if (isDemoMode()) return demoGetSimilarVehicles(vehicle, limit)
-  return dbGetSimilarVehicles(vehicle, limit)
+  return pickSimilar(allVehicles(), vehicle, limit)
 }
 
 /**
@@ -221,17 +219,12 @@ export async function getSimilarVehicles(vehicle: Vehicle, limit = 3): Promise<V
  * exclude each field's own filter.
  */
 export async function getFilterOptions(filters: VehicleFilters = {}): Promise<FilterOptions> {
-  if (isDemoMode()) return demoGetFilterOptions(filters)
-  return dbGetFilterOptions(filters)
+  return buildFilterOptions(allVehicles(), filters)
 }
 
-/**
- * Slug + last-modified for every publicly listable vehicle. Used only by
- * the sitemap, which needs every URL rather than one page of them.
- */
+/** Every listable vehicle. Used by the sitemap, which needs all of them. */
 export async function getAllListableVehicles(): Promise<Vehicle[]> {
-  const all = isDemoMode() ? DEMO_VEHICLES : await fetchPublicVehicles()
-  return sortVehicles(all.filter(isPubliclyListable), 'newest')
+  return sortVehicles(allVehicles().filter(isPubliclyListable), 'newest')
 }
 
 export type {

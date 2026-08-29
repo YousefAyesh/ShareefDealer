@@ -1,0 +1,28 @@
+{
+  "stockNumber": "RS-1012",
+  "vin": "1N4AL3AP7GC198832",
+  "year": 2016,
+  "make": "Nissan",
+  "model": "Altima",
+  "trim": "S",
+  "bodyStyle": "Sedan",
+  "drivetrain": "FWD",
+  "transmission": "Automatic",
+  "engine": "2.5L I4",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Brilliant Silver",
+  "interiorColor": "Charcoal",
+  "mileage": 118600,
+  "price": 9995,
+  "description": "Roomy sedan with plenty of miles left in it. Give us a call for down payment and weekly payment options on this one -- terms depend on the deal.",
+  "features": [
+    "Bluetooth",
+    "Power Windows",
+    "Power Locks",
+    "Cruise Control"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-07-22"
+}

@@ -1,0 +1,26 @@
+{
+  "stockNumber": "RS-1004",
+  "vin": "1G1ZD5ST1HF231987",
+  "year": 2015,
+  "make": "Chevrolet",
+  "model": "Malibu",
+  "trim": "LT",
+  "bodyStyle": "Sedan",
+  "drivetrain": "FWD",
+  "transmission": "Automatic",
+  "engine": "1.5L I4 Turbo",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Black Granite",
+  "interiorColor": "Jet Black",
+  "mileage": 131900,
+  "description": "We're still getting this Malibu priced -- give us a call and we'll get you a number today. Comfortable, clean inside, runs great.",
+  "features": [
+    "Bluetooth",
+    "Power Windows",
+    "Alloy Wheels"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-07-15"
+}

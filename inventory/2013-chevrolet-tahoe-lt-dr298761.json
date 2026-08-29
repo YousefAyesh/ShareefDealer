@@ -1,0 +1,32 @@
+{
+  "stockNumber": "RS-0981",
+  "vin": "1GNSKBKC3DR298761",
+  "year": 2013,
+  "make": "Chevrolet",
+  "model": "Tahoe",
+  "trim": "LT",
+  "bodyStyle": "SUV",
+  "drivetrain": "4WD",
+  "transmission": "Automatic",
+  "engine": "5.3L V8",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Mocha Steel Metallic",
+  "interiorColor": "Cocoa/Dune",
+  "mileage": 138200,
+  "price": 21995,
+  "downPayment": 2200,
+  "weeklyPayment": 155,
+  "description": "Full-size, third-row Tahoe with the 5.3L V8 -- room for the whole family plus the tow rating to bring the boat. High miles but a strong-running motor and clean interior.",
+  "features": [
+    "Third Row Seating",
+    "Backup Camera",
+    "Bluetooth",
+    "Tow Package",
+    "Leather Seats",
+    "Alloy Wheels"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-07-30"
+}

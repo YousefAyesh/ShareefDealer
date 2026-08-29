@@ -1,0 +1,31 @@
+{
+  "stockNumber": "RS-1043",
+  "vin": "5YFBURHE9KP112087",
+  "year": 2019,
+  "make": "Toyota",
+  "model": "Corolla",
+  "trim": "LE",
+  "bodyStyle": "Sedan",
+  "drivetrain": "FWD",
+  "transmission": "Automatic",
+  "engine": "1.8L I4",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Classic Silver",
+  "interiorColor": "Black",
+  "mileage": 65300,
+  "price": 13495,
+  "downPayment": 1200,
+  "weeklyPayment": 95,
+  "description": "Our newest, lowest-mileage Corolla. Still smells new. Toyota reliability with a payment that fits a weekly budget -- this is the one people ask about first.",
+  "features": [
+    "Backup Camera",
+    "Bluetooth",
+    "Lane Departure Warning",
+    "Cruise Control",
+    "Power Windows"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-08-12"
+}

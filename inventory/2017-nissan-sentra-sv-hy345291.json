@@ -1,0 +1,31 @@
+{
+  "stockNumber": "RS-1031",
+  "vin": "3N1AB7AP8HY345291",
+  "year": 2017,
+  "make": "Nissan",
+  "model": "Sentra",
+  "trim": "SV",
+  "bodyStyle": "Sedan",
+  "drivetrain": "FWD",
+  "transmission": "Automatic",
+  "engine": "1.8L I4",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Fresh Powder White",
+  "interiorColor": "Charcoal",
+  "mileage": 104900,
+  "price": 9495,
+  "downPayment": 750,
+  "weeklyPayment": 79,
+  "description": "One of our lowest weekly payments on the lot right now. Good on gas, easy to insure, and it's been checked out bumper to bumper.",
+  "features": [
+    "Bluetooth",
+    "Power Windows",
+    "Power Locks",
+    "Cruise Control",
+    "Keyless Entry"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-08-02"
+}

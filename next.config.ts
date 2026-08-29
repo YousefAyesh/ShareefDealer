@@ -1,18 +1,28 @@
 import type { NextConfig } from 'next'
 
-/**
- * Vercel Blob serves every synced vehicle photo from a per-store subdomain
- * of public.blob.vercel-storage.com. next/image refuses any remote host not
- * listed here and throws at request time, so without this entry the entire
- * site 500s on real inventory the moment DEMO_MODE is turned off -- while
- * looking perfectly fine in demo mode, where photos are local files.
- */
 const nextConfig: NextConfig = {
+  /**
+   * The inventory lives in JSON files that src/lib/inventory.ts reads with
+   * fs at request time. Next's dependency tracer only follows `import`
+   * statements, so it cannot see a runtime readdir of a folder and would
+   * leave inventory/ out of the deployed bundle entirely -- producing a
+   * site that works perfectly in `next dev` and shows an empty lot in
+   * production. Naming the folder here puts it in the bundle.
+   *
+   * public/ is copied verbatim by the platform, so the photos need no
+   * equivalent entry.
+   */
+  outputFileTracingIncludes: {
+    '/**': ['./inventory/**/*.json'],
+  },
+
   images: {
-    remotePatterns: [{ protocol: 'https', hostname: '**.public.blob.vercel-storage.com' }],
-    // The synced photo variants are already sized and WebP-encoded by
-    // src/lib/frazer/photos.ts, so this list only needs the widths the
-    // layout actually renders at.
+    /**
+     * No remotePatterns: every photo is a local file under public/, served
+     * from the site's own origin. next/image still resizes and re-encodes
+     * them on demand, which is why scripts/photos.mjs stores exactly one
+     * copy of each picture instead of a thumb/card/full set.
+     */
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [96, 160, 256, 384],
     formats: ['image/webp'],

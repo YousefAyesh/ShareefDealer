@@ -1,0 +1,28 @@
+{
+  "stockNumber": "RS-0972",
+  "vin": "2G1WB5E3771234567",
+  "year": 2015,
+  "make": "Chevrolet",
+  "model": "Impala",
+  "trim": "LT",
+  "bodyStyle": "Sedan",
+  "drivetrain": "FWD",
+  "transmission": "Automatic",
+  "engine": "3.6L V6",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Crystal Red Tintcoat",
+  "interiorColor": "Jet Black",
+  "mileage": 129400,
+  "price": 8995,
+  "description": "This one found a home. Check out the rest of the lot for similar sedans -- we get new inventory every week.",
+  "features": [
+    "Bluetooth",
+    "Power Windows",
+    "Alloy Wheels",
+    "Remote Start"
+  ],
+  "status": "sold",
+  "priceReduced": false,
+  "listedAt": "2026-06-20"
+}

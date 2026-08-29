@@ -1,0 +1,31 @@
+{
+  "stockNumber": "RS-0998",
+  "vin": "2GNAXKEV5EJ145522",
+  "year": 2014,
+  "make": "Chevrolet",
+  "model": "Equinox",
+  "trim": "LT",
+  "bodyStyle": "SUV",
+  "drivetrain": "FWD",
+  "transmission": "Automatic",
+  "engine": "2.4L I4",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Champagne Silver",
+  "interiorColor": "Jet Black",
+  "mileage": 124700,
+  "price": 10995,
+  "downPayment": 1000,
+  "weeklyPayment": 95,
+  "description": "Family-size SUV with a third-row-sized cargo area (no third row, but plenty of room). Good AC, good tires, and priced to move.",
+  "features": [
+    "Backup Camera",
+    "Bluetooth",
+    "Roof Rails",
+    "Power Windows",
+    "Cruise Control"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-07-28"
+}

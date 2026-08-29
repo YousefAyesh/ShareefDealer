@@ -1,0 +1,32 @@
+{
+  "stockNumber": "RS-1041",
+  "vin": "3GCUKSEC5KG482910",
+  "year": 2019,
+  "make": "Chevrolet",
+  "model": "Silverado 1500",
+  "trim": "LT",
+  "bodyStyle": "Truck",
+  "drivetrain": "4WD",
+  "transmission": "Automatic",
+  "engine": "5.3L V8",
+  "fuelType": "Gasoline",
+  "doors": 4,
+  "exteriorColor": "Summit White",
+  "interiorColor": "Jet Black",
+  "mileage": 88400,
+  "price": 18995,
+  "downPayment": 1500,
+  "weeklyPayment": 115,
+  "description": "Crew cab, 4WD, and ready to work. This Silverado's been through our shop and comes with a tow package -- hook up the trailer and go. Clean title, runs strong.",
+  "features": [
+    "Backup Camera",
+    "Bluetooth",
+    "Tow Package",
+    "Cruise Control",
+    "Alloy Wheels",
+    "Bed Liner"
+  ],
+  "status": "available",
+  "priceReduced": false,
+  "listedAt": "2026-08-08"
+}

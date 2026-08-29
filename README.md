@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Roadstar Auto Sales — website
 
-## Getting Started
+A used car dealership website. The inventory is plain files in this repo:
+no database, no admin panel, no monthly bill for anything but the domain.
 
-First, run the development server:
+**Adding and changing cars is done by talking to Claude.** The instructions
+it follows are in [CLAUDE.md](CLAUDE.md) — that file is the manual for
+running this site, and it is worth reading even if you never touch the code.
+
+---
+
+## How the inventory works
+
+| What | Where |
+|---|---|
+| One car | `inventory/<slug>.json` |
+| That car's photos | `public/inventory/<slug>/01.webp`, `02.webp`, … |
+| Photos waiting to be added | `uploads/` |
+| Name, address, phone, hours | `src/lib/dealer.ts` |
+
+The filename is the web address. `inventory/2019-jeep-cherokee-latitude-d123456.json`
+is served at `/inventory/2019-jeep-cherokee-latitude-d123456`.
+
+A car with no photos does not appear on the site. That is deliberate — a
+listing with no picture does not get a phone call.
+
+---
+
+## Running it locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+There is nothing to configure. No database URL, no API key.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run check:inventory   # validate every car file
+npm test                  # full test suite
+npm run build             # production build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`npm run photos -- <slug> uploads` resizes and installs photos for one car.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Deploying
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Connected to Vercel. Push to `main` and it rebuilds automatically, usually
+in under a minute.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Environment variables to set in the Vercel project:
 
-## Deploy on Vercel
+| Variable | Value | Why |
+|---|---|---|
+| `NEXT_PUBLIC_SITE_URL` | the live domain | Canonical URLs, sitemap, and the business data Google reads |
+| `ALLOW_PLACEHOLDER_DEALER` | `true` | **Temporary.** Remove it once the real details are in `src/lib/dealer.ts` |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### About that second one
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`src/lib/dealer.ts` currently holds a fictional business name, a 555 phone
+number and an invented address. The build **refuses to deploy to production**
+while those are in place, because a live dealership site showing a fake phone
+number sends real buyers to a stranger.
+
+`ALLOW_PLACEHOLDER_DEALER=true` overrides that so the site can go up before
+the real details are known. **Fill in `src/lib/dealer.ts` and delete that
+variable** — then the guard is protecting you again.
+
+Everything on the site reads from that one file: header, footer, contact
+page, map links, and the structured data Google uses to show hours and
+directions in search results.
+
+---
+
+## What still needs a human
+
+- **The real business details** — name, address, phone, hours, dealer license
+  number. See `docs/client-intake-questions.md`, section 1.
+- **A lawyer's eyes on the policy pages.** `/privacy`, `/terms` and
+  `/accessibility` are written to describe accurately what this site does
+  today — no forms, no analytics, no cookies. That stays true only as long as
+  nobody adds those things. State dealer advertising rules may also require
+  disclosures these pages do not attempt to guess at.
+
+---
+
+## If the inventory ever outgrows this
+
+The dealership runs Frazer, which can export inventory automatically. A full
+sync pipeline for it — feed parsing, photo ingestion, reconciliation, an
+admin dashboard — is built and tested on the `feat/frazer-ingest-pipeline`
+branch. It was removed from `main` because there is no feed connected yet and
+it is not worth the complexity until there is.
+
+Worth revisiting at roughly 60+ cars, or whenever typing each car into both
+Frazer and this site stops being tolerable.
