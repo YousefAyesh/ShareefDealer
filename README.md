@@ -54,8 +54,11 @@ Environment variables to set in the Vercel project:
 
 | Variable | Value | Why |
 |---|---|---|
-| `NEXT_PUBLIC_SITE_URL` | the live domain | Canonical URLs, sitemap, and the business data Google reads |
 | `ALLOW_PLACEHOLDER_DEALER` | `true` | **Temporary.** Remove it once the real details are in `src/lib/dealer.ts` |
+| `NEXT_PUBLIC_SITE_URL` | the live domain | **Optional on Vercel** — only needed once there is a custom domain. Without it the site uses Vercel's own production domain automatically. |
+
+Environment variable changes do not trigger a rebuild on their own. After
+adding them, redeploy from **Deployments → ⋯ → Redeploy**.
 
 ### About that second one
 

@@ -21,7 +21,32 @@
  * After editing, verify: `npm run build`.
  */
 
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.roadstarautosales.example'
+/**
+ * The site's canonical origin, used for canonical tags, Open Graph URLs,
+ * JSON-LD @id values and the sitemap.
+ *
+ * Resolution order:
+ *   1. NEXT_PUBLIC_SITE_URL   — set this once there is a real domain.
+ *   2. VERCEL_PROJECT_PRODUCTION_URL — Vercel supplies this automatically
+ *      and it is the *stable* production domain, not the per-deployment URL
+ *      (VERCEL_URL), which changes on every push and would make canonical
+ *      tags point at a deployment that is no longer current.
+ *   3. The reserved .example domain, which the placeholder guard rejects.
+ *
+ * Every consumer is a server component or route handler, so this does not
+ * need the NEXT_PUBLIC_ prefix to reach the browser -- it never does.
+ */
+function resolveSiteUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  if (explicit) return explicit.replace(/\/+$/, '')
+
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
+
+  return 'https://www.roadstarautosales.example'
+}
+
+export const SITE_URL = resolveSiteUrl()
 
 export const DEALER = {
   name: 'Roadstar Auto Sales',
