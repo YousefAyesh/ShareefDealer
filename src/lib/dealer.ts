@@ -18,7 +18,7 @@
  * docs/client-intake-questions.md. Until they land, `assertRealDealerData`
  * below refuses to let the site build for production -- see that function.
  *
- * After editing, verify: `npm run check:dealer`.
+ * After editing, verify: `npm run build`.
  */
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.roadstarautosales.example'
@@ -135,8 +135,13 @@ export function openingHoursSpecification() {
 // ---------------------------------------------------------------------------
 
 /**
- * Every marker that says "this is still fake data". Checked by
- * `npm run check:dealer`, which runs as part of `npm run build`.
+ * Every marker that says "this is still fake data".
+ *
+ * Read by assertRealDealerData below, which the root layout calls at module
+ * scope -- so it runs while Next is building the pages and fails the build
+ * there. Deliberately not a separate build script: the one this replaced
+ * shelled out to `node --experimental-strip-types`, which needs Node 22.6+
+ * and therefore broke the build outright on any host running an older Node.
  */
 export function placeholderProblems(): string[] {
   const problems: string[] = []

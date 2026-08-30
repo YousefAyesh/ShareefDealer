@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=18.17.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -12,8 +12,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:dealer": "node scripts/check-dealer.mjs",
-    "prebuild": "node scripts/check-dealer.mjs && vitest run tests/inventory-files.test.ts",
+    "prebuild": "vitest run tests/inventory-files.test.ts",
     "check:inventory": "vitest run tests/inventory-files.test.ts",
     "photos": "node scripts/photos.mjs"
   },
