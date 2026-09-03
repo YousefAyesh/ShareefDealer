@@ -38,8 +38,6 @@ export function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
         <p className="text-sm text-navy/70">{formatMileage(vehicle.mileage)}</p>
         <PriceBlock
           priceCents={vehicle.priceCents}
-          downPaymentCents={vehicle.downPaymentCents}
-          weeklyPaymentCents={vehicle.weeklyPaymentCents}
           priceReduced={vehicle.priceReduced}
           size="compact"
         />

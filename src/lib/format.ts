@@ -2,10 +2,9 @@
  * Pure display formatters for vehicle data. No I/O, no DB access.
  *
  * These formatters never compute or estimate a number that isn't already on
- * the record. A payment shown on a dealer site is one the dealer is legally
- * held to, so formatPayment returns null unless the feed supplied both the
- * down payment and the periodic payment -- it will not derive one from the
- * other, or from the price.
+ * the record. There is deliberately no payment formatter: this dealership
+ * is cash only, so a listing shows the price and nothing else. See
+ * CREDIT_TERM_KEYS in inventory-schema.ts.
  */
 
 export function formatPrice(cents: number | null | undefined): string {
@@ -15,16 +14,6 @@ export function formatPrice(cents: number | null | undefined): string {
   if (cents == null || cents === 0) return 'Call for Price'
   const dollars = Math.round(cents / 100)
   return `$${dollars.toLocaleString('en-US')}`
-}
-
-export function formatPayment(
-  downCents: number | null | undefined,
-  weeklyCents: number | null | undefined,
-): string | null {
-  if (downCents == null || weeklyCents == null) return null
-  const down = Math.round(downCents / 100)
-  const weekly = Math.round(weeklyCents / 100)
-  return `$${down.toLocaleString('en-US')} down · $${weekly.toLocaleString('en-US')}/week`
 }
 
 export function formatMileage(mi: number | null | undefined): string {

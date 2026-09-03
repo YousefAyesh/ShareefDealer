@@ -205,12 +205,13 @@ export default async function VehicleDetailPage({ params }: PageProps) {
               <div className="mt-3">
                 <PriceBlock
                   priceCents={vehicle.priceCents}
-                  downPaymentCents={vehicle.downPaymentCents}
-                  weeklyPaymentCents={vehicle.weeklyPaymentCents}
                   priceReduced={vehicle.priceReduced}
                 />
                 <p className="mt-2 text-xs text-navy/60">
                   Price excludes tax, title, license and dealer fees. Subject to prior sale.
+                </p>
+                <p className="mt-1.5 text-xs font-semibold text-navy/75">
+                  Cash only — we do not offer financing.
                 </p>
               </div>
             </div>

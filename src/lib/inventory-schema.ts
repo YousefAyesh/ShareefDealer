@@ -67,8 +67,6 @@ export const vehicleFileSchema = z.object({
     .optional(),
 
   price: money('price'),
-  downPayment: money('downPayment'),
-  weeklyPayment: money('weeklyPayment'),
 
   description: z.string().optional(),
   features: z.array(z.string()).optional(),
@@ -88,6 +86,41 @@ export const vehicleFileSchema = z.object({
 
 export type VehicleFile = z.infer<typeof vehicleFileSchema>
 
+/**
+ * Keys that would publish credit terms.
+ *
+ * This is a cash-only dealership: it does not finance, so no listing may
+ * carry a down payment, a periodic payment, a term or a rate. Stating any
+ * of those in an advertisement is what triggers Regulation Z's disclosure
+ * requirements (12 CFR 1026.24), which this site makes no attempt to
+ * satisfy -- and the figures would simply be untrue besides.
+ *
+ * zod strips unknown keys silently, so a file pasted from the old format
+ * would otherwise lose its payment fields without anyone noticing the
+ * mismatch. Checking the raw input first makes it a loud, explained
+ * failure in `npm run check:inventory` instead.
+ */
+const CREDIT_TERM_KEYS = [
+  'downPayment',
+  'weeklyPayment',
+  'monthlyPayment',
+  'biweeklyPayment',
+  'payment',
+  'apr',
+  'interestRate',
+  'termMonths',
+  'financing',
+] as const
+
+function creditTermProblems(raw: unknown): string[] {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return []
+  const keys = new Set(Object.keys(raw))
+  return CREDIT_TERM_KEYS.filter((k) => keys.has(k)).map(
+    (k) =>
+      `${k}: remove this field. This dealership is cash only, and publishing a payment, rate or term on a listing advertises credit the dealership does not offer. List the price alone.`,
+  )
+}
+
 export type ParseResult =
   | { ok: true; value: VehicleFile }
   | { ok: false; errors: string[] }
@@ -98,6 +131,9 @@ export type ParseResult =
  * relaying them to a dealer -- so they name the field and say what to do.
  */
 export function parseVehicleFile(raw: unknown): ParseResult {
+  const credit = creditTermProblems(raw)
+  if (credit.length > 0) return { ok: false, errors: credit }
+
   const result = vehicleFileSchema.safeParse(raw)
   if (result.success) return { ok: true, value: result.data }
 

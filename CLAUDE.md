@@ -173,8 +173,6 @@ lie on a car listing.
   "interiorColor": "Jet Black",
   "mileage": 88400,
   "price": 18995,
-  "downPayment": 1500,
-  "weeklyPayment": 115,
   "description": "Crew cab, 4WD, tow package. Clean title, runs strong.",
   "features": ["Backup Camera", "Bluetooth", "Tow Package"],
   "status": "available",
@@ -190,11 +188,13 @@ lie on a car listing.
 `npm run check:inventory` rejects anything over $1,000,000 on the assumption
 it is cents by mistake.
 
-**Never invent a payment.** `downPayment` and `weeklyPayment` only go in the
-file if *he told you those exact numbers*. Do not calculate them from the
-price, do not estimate, do not annualise. A payment shown on a dealer website
-is one he is legally held to. If he has not given you both numbers, leave both
-out and the site shows the price alone.
+**This is a cash-only dealership. A listing shows the price, full stop.**
+There is no `downPayment`, no `weeklyPayment`, no APR, no term. Those fields
+were removed from the format, and `npm run check:inventory` now *rejects* any
+file that carries one rather than quietly ignoring it. Do not add them back,
+and do not write payment language into a `description` either ("low weekly
+payment", "call for down payment options"). He does not finance, so any such
+figure is both untrue and an advertised credit term.
 
 **Never invent specs.** No mileage is better than an approximate mileage. The
 same goes for features — list what he told you and what the VIN decode
@@ -235,8 +235,11 @@ npx tsc --noEmit && npm run lint && npm test
   for analytics, say yes, and update `src/app/privacy/page.tsx` in the same
   commit.
 - **Do not advertise financing, credit terms, APR, or "no credit check".**
-  This dealership does not finance. Advertising credit terms triggers federal
-  disclosure requirements the site does not meet.
+  This dealership sells for cash and does not finance. Advertising credit
+  terms triggers federal disclosure requirements (Regulation Z, 12 CFR
+  1026.24) the site does not meet. The site says "cash only" on the home
+  page, every listing, the inventory list, About and Terms — if that ever
+  changes, all six have to change together.
 - **Do not put a real photo of a car on a listing that is not that exact car.**
 - **Do not commit anything from `uploads/`.**
 - **Do not edit `src/lib/vehicle-filter.ts` or `src/lib/search-params.ts`** to

@@ -41,9 +41,10 @@ export default function TermsPage() {
 
       <h2>Pricing</h2>
       <p>
-        Listed prices exclude tax, title, license and dealer fees unless a listing says otherwise.
-        Prices apply to the specific vehicle shown. We do not compute, estimate or advertise financing
-        terms on this website.
+        Listed prices are cash prices. They exclude tax, title, license and dealer fees unless a
+        listing says otherwise, and they apply to the specific vehicle shown. We do not offer
+        financing, credit or payment plans of any kind, and nothing on this website computes,
+        estimates or advertises financing terms.
       </p>
 
       <h2>Vehicle condition</h2>

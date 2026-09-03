@@ -165,8 +165,9 @@ export default async function InventoryPage({
           price, not buried in a footer. This repeats the per-vehicle
           disclaimer at the bottom of the list view. */}
       <p className="mt-8 text-xs text-navy/60">
-        All prices exclude tax, title, license and dealer fees. Vehicles subject to prior sale. Mileage
-        and equipment are believed accurate but not guaranteed — verify with us before purchase.
+        All prices are cash prices — we do not offer financing. Prices exclude tax, title, license and
+        dealer fees. Vehicles subject to prior sale. Mileage and equipment are believed accurate but
+        not guaranteed — verify with us before purchase.
       </p>
     </div>
   )

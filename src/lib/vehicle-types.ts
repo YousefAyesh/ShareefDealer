@@ -39,8 +39,6 @@ export type Vehicle = {
   mileage: number | null
 
   priceCents: number | null
-  downPaymentCents: number | null
-  weeklyPaymentCents: number | null
 
   description: string | null
   features: string[]

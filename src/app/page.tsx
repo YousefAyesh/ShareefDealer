@@ -200,10 +200,10 @@ export default async function HomePage() {
           <div className="flex items-start gap-3">
             <CheckCircleIcon className="mt-0.5 h-6 w-6 shrink-0 text-gold" />
             <div>
-              <p className="font-display text-sm uppercase tracking-wide text-cream">Every Car, Every Price</p>
+              <p className="font-display text-sm uppercase tracking-wide text-cream">Cash Price, Up Front</p>
               <p className="mt-1 text-sm text-cream/70">
-                Our full lot is online with real photos and the price on the windshield. No bait
-                listings, no cars that sold last month.
+                Our full lot is online with real photos and the price on the windshield — no bait
+                listings. We sell for cash and do not offer financing.
               </p>
             </div>
           </div>

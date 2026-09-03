@@ -63,3 +63,30 @@ describe('parseVehicleFile', () => {
     expect(errors.every((e) => e.includes(':'))).toBe(true)
   })
 })
+
+describe('credit terms', () => {
+  // This dealership is cash only. zod strips unknown keys silently, so
+  // without an explicit check a file pasted from the old payment-carrying
+  // format would lose those fields with nobody told. These assertions are
+  // the tripwire: if someone re-adds the fields to the schema, they fail.
+  const base = { year: 2019, make: 'Toyota', model: 'Corolla', price: 14995 }
+
+  it.each([
+    'downPayment',
+    'weeklyPayment',
+    'monthlyPayment',
+    'apr',
+    'termMonths',
+    'financing',
+  ])('rejects %s rather than silently dropping it', (field) => {
+    const result = parseVehicleFile({ ...base, [field]: 100 })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.errors.join(' ')).toContain(field)
+    expect(result.errors.join(' ')).toMatch(/cash only/i)
+  })
+
+  it('still accepts a listing that carries only a cash price', () => {
+    expect(parseVehicleFile(base).ok).toBe(true)
+  })
+})

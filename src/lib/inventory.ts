@@ -109,8 +109,6 @@ function toVehicle(slug: string, file: VehicleFile, listedAt: string): Vehicle {
     interiorColor: file.interiorColor ?? null,
     mileage: file.mileage ?? null,
     priceCents: cents(file.price),
-    downPaymentCents: cents(file.downPayment),
-    weeklyPaymentCents: cents(file.weeklyPayment),
     description: file.description ?? null,
     features: file.features ?? [],
     status: file.status ?? 'available',

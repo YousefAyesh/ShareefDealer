@@ -43,6 +43,10 @@ const PROMISES = [
     body: 'Ask us what we know about a car and we’ll tell you, including what it needs. We’d rather you buy the right one than the first one.',
   },
   {
+    title: 'Cash only',
+    body: 'We sell for cash — we don’t offer financing, credit or in-house payment plans. The price you see is what the car costs, so there’s nothing to qualify for and no paperwork to wait on.',
+  },
+  {
     title: 'Inspect anything',
     body: 'You’re welcome to take any vehicle to your own mechanic before you buy it. We’ll hand you the keys.',
   },

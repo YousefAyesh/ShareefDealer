@@ -44,8 +44,6 @@ function vehicle(overrides: Partial<Vehicle> = {}): Vehicle {
     interiorColor: 'Gray',
     mileage: 90_000,
     priceCents: 1_800_000,
-    downPaymentCents: null,
-    weeklyPaymentCents: null,
     description: null,
     features: [],
     status: 'available',

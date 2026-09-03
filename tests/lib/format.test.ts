@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMileage, formatPayment, formatPrice, vehicleTitle } from '@/lib/format'
+import { formatMileage, formatPrice, vehicleTitle } from '@/lib/format'
 
 describe('formatPrice', () => {
   it('formats whole-dollar prices with thousands separators', () => {
@@ -20,28 +20,6 @@ describe('formatPrice', () => {
 
   it('never renders $0 for a zero price -- treats it like missing', () => {
     expect(formatPrice(0)).toBe('Call for Price')
-  })
-})
-
-describe('formatPayment', () => {
-  it('formats down payment and weekly payment together', () => {
-    expect(formatPayment(50000, 8900)).toBe('$500 down · $89/week')
-  })
-
-  it('returns null when down payment is missing', () => {
-    expect(formatPayment(null, 8900)).toBeNull()
-  })
-
-  it('returns null when weekly payment is missing', () => {
-    expect(formatPayment(50000, null)).toBeNull()
-  })
-
-  it('returns null when both are missing', () => {
-    expect(formatPayment(null, null)).toBeNull()
-  })
-
-  it('returns null when both are undefined', () => {
-    expect(formatPayment(undefined, undefined)).toBeNull()
   })
 })
 
