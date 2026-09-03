@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { JsonLd, autoDealerJsonLd } from '@/components/JsonLd'
 import { VehicleCard } from '@/components/VehicleCard'
+import { VehicleRequest } from '@/components/VehicleRequest'
 import { CheckCircleIcon, ClockIcon, MapPinIcon, PhoneIcon, SearchIcon } from '@/components/icons'
 import { DEALER, SITE_URL, fullAddress, hoursToday } from '@/lib/dealer'
 import { getNewestArrivals } from '@/lib/inventory'
@@ -162,6 +163,10 @@ export default async function HomePage() {
           </p>
         )}
       </section>
+
+      <div className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
+        <VehicleRequest />
+      </div>
 
       {/* Trust strip */}
       <section className="bg-navy py-10 text-cream">

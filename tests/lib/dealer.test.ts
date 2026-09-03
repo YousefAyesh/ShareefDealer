@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { DEALER, formatHours, formatTime, hoursToday, openingHoursSpecification, placeholderProblems } from '@/lib/dealer'
+import {
+  DEALER,
+  formatHours,
+  formatTime,
+  hoursToday,
+  openingHoursSpecification,
+  placeholderProblems,
+  smsHrefWithBody,
+} from '@/lib/dealer'
 
 describe('formatTime', () => {
   it('renders midnight and noon as 12, not 0', () => {
@@ -60,5 +68,40 @@ describe('placeholderProblems', () => {
     const problems = placeholderProblems()
     expect(problems.length).toBeGreaterThan(0)
     expect(problems.join(' ')).toMatch(/phone/i)
+  })
+})
+
+describe('smsHrefWithBody', () => {
+  /** DEALER is `as const`, so TypeScript treats smsHref as readonly. */
+  function withSmsHref(value: string | null, run: () => void) {
+    const original = DEALER.smsHref
+    ;(DEALER as unknown as { smsHref: string | null }).smsHref = value
+    try {
+      run()
+    } finally {
+      ;(DEALER as unknown as { smsHref: string | null }).smsHref = original
+    }
+  }
+
+  it('uses the ?&body= separator both iOS and Android accept', () => {
+    withSmsHref('sms:+15125550182', () => {
+      expect(smsHrefWithBody('hi')).toBe('sms:+15125550182?&body=hi')
+    })
+  })
+
+  it('percent-encodes the message so punctuation cannot truncate it', () => {
+    withSmsHref('sms:+15125550182', () => {
+      // A bare & would end the body and turn the rest into a second
+      // parameter, silently dropping half the message.
+      const href = smsHrefWithBody("Hi! I'm after a truck & a van")
+      expect(href).toContain('%26')
+      expect(href?.split('&body=')).toHaveLength(2)
+    })
+  })
+
+  it('returns null when the line cannot receive texts, so callers fall back to the phone', () => {
+    withSmsHref(null, () => {
+      expect(smsHrefWithBody('hi')).toBeNull()
+    })
   })
 })

@@ -235,3 +235,18 @@ export function assertRealDealerData(): void {
     ].join('\n'),
   )
 }
+
+/**
+ * The dealer's SMS link with a message already typed into it, so a shopper
+ * only has to finish the sentence and hit send.
+ *
+ * The `?&body=` separator is deliberate and is not a typo. Android parses
+ * the ordinary `?body=`, but iOS historically only honoured `&body=`, and
+ * `?&body=` is the one form both platforms accept. Returns null when the
+ * dealer's line cannot receive texts (intake question 5), so callers can
+ * fall back to the phone rather than opening a message that goes nowhere.
+ */
+export function smsHrefWithBody(body: string): string | null {
+  if (!DEALER.smsHref) return null
+  return `${DEALER.smsHref}?&body=${encodeURIComponent(body)}`
+}

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { EmptyState } from '@/components/EmptyState'
+import { VehicleRequest } from '@/components/VehicleRequest'
 import { InventorySkeleton } from '@/components/InventorySkeleton'
 import { FilterChips, InventoryFilters, Pagination, SortForm } from '@/components/InventoryFilters'
 import { JsonLd, breadcrumbJsonLd } from '@/components/JsonLd'
@@ -155,6 +156,10 @@ export default async function InventoryPage({
       <Suspense key={JSON.stringify(filters)} fallback={<InventorySkeleton />}>
         <InventoryResults filters={filters} />
       </Suspense>
+
+      <div className="mt-10">
+        <VehicleRequest />
+      </div>
 
       {/* FTC "clear and conspicuous" wants pricing qualifiers near the
           price, not buried in a footer. This repeats the per-vehicle
