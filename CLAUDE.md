@@ -227,10 +227,14 @@ npx tsc --noEmit && npm run lint && npm test
 
 ## Things not to do
 
-- **Do not add a contact form, live chat, or anything that collects a name or
-  email.** He wants calls and texts. The privacy policy states plainly that
-  the site collects nothing, and adding a form makes that statement false —
-  which in several states carries a real penalty.
+- **The only form is the "Don't see what you're looking for?" request form**
+  (`src/components/VehicleRequestForm.tsx`, posting to Formspree — endpoint
+  in `DEALER.formspreeEndpoint`). Do not add other forms, fields, live chat,
+  or anything else that collects a name or email without updating
+  `src/app/privacy/page.tsx` in the same commit — the policy lists exactly
+  what that one form collects, and a policy that misdescribes collection
+  carries a real penalty in several states. Do not turn it into a mailing
+  list either (CAN-SPAM).
 - **Do not add analytics or tracking pixels** for the same reason. If he asks
   for analytics, say yes, and update `src/app/privacy/page.tsx` in the same
   commit.

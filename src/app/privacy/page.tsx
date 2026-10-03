@@ -12,11 +12,12 @@ export const metadata: Metadata = {
  * ⚠️  REVIEW BEFORE LAUNCH.
  *
  * This policy is written to describe what this site *actually does today*,
- * which is unusually little: there are no lead forms, no analytics, no
- * advertising pixels, no account system, and no cookies set by us. Fonts
- * are self-hosted by next/font at build time, so no request reaches Google
- * for them. The only third party a visitor's browser contacts is Google
- * Maps, and only on the Visit Us page.
+ * which is unusually little: one vehicle-request form posting to Formspree
+ * (VehicleRequestForm), no analytics, no advertising pixels, no account
+ * system, and no cookies set by us. Fonts are self-hosted by next/font at
+ * build time, so no request reaches Google for them. The only third
+ * parties a visitor's browser contacts are Google Maps (Visit Us page
+ * only) and Formspree (only when the form is submitted).
  *
  * That makes it accurate, but it also makes it FRAGILE: the moment anyone
  * adds Google Analytics, a Meta pixel, a chat widget, or a "check
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
  */
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" href="/privacy" lastUpdated="2026-08-28">
+    <LegalPage title="Privacy Policy" href="/privacy" lastUpdated="2026-10-03">
       <p>
         This policy explains what happens to information when you use this website. It covers this
         website only — information you give us in person, over the phone, or by text is handled
@@ -41,9 +42,16 @@ export default function PrivacyPage() {
 
       <h2>What this website collects</h2>
       <p>
-        This website has no contact forms, no accounts, and no newsletter signup. There is nothing
-        here for you to fill in, so we do not collect names, addresses, phone numbers, email
-        addresses or any other personal details through it.
+        This website has one form: the &ldquo;Don&apos;t see what you&apos;re looking for?&rdquo;
+        form on the home and inventory pages. If you choose to fill it in, we receive the vehicle
+        you describe, your budget if you give one, your name, your phone number, and your email
+        address if you give one. We use that only to contact you about vehicles matching your
+        request. We do not add you to a mailing list, and we do not sell or share it. If you would
+        like us to stop contacting you or delete your request, just tell us by phone, text or email.
+      </p>
+      <p>
+        Apart from that form, the site has no accounts and no newsletter signup, and we do not
+        collect personal details through it.
       </p>
       <p>
         Like essentially every website, our hosting provider keeps standard server logs of requests
@@ -66,7 +74,16 @@ export default function PrivacyPage() {
         <a href="https://policies.google.com/privacy" rel="noopener noreferrer" target="_blank">
           Google&apos;s privacy policy
         </a>
-        , not this one. No other page on this site loads third-party content.
+        , not this one.
+      </p>
+      <p>
+        When you submit the vehicle request form, it is delivered to us by Formspree, a form
+        processing service, which forwards it to our email. Formspree receives what you entered along
+        with your IP address and browser details, and handles it under{' '}
+        <a href="https://formspree.io/legal/privacy-policy/" rel="noopener noreferrer" target="_blank">
+          Formspree&apos;s privacy policy
+        </a>
+        . Nothing is sent to Formspree unless you press the submit button.
       </p>
       <p>
         Vehicle photographs and details on this site come from our dealer management system. We do
@@ -89,16 +106,16 @@ export default function PrivacyPage() {
 
       <h2>Your choices</h2>
       <p>
-        Because we do not collect personal information through this website, there is generally
-        nothing here for us to look up, correct or delete. Depending on where you live, you may still
-        have rights regarding information we hold about you as a customer. To ask about that, contact
-        us using the details below and we will respond as required by applicable law.
+        If you sent us a vehicle request, you can ask us to correct or delete it at any time.
+        Depending on where you live, you may also have other rights regarding information we hold
+        about you as a customer. To ask about any of this, contact us using the details below and we
+        will respond as required by applicable law.
       </p>
 
       <h2>Changes</h2>
       <p>
-        If we add anything to this site that collects information — a contact form or analytics, for
-        example — we will update this policy and change the date at the top before doing so.
+        If we add anything else to this site that collects information — another form or analytics,
+        for example — we will update this policy and change the date at the top before doing so.
       </p>
 
       <h2>Contact</h2>

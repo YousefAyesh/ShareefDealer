@@ -57,6 +57,13 @@ export const DEALER = {
   /** Set to null if the main line cannot receive texts (intake question 5). */
   smsHref: 'sms:+15125550182' as string | null,
   email: 'info@roadstarautosales.example',
+  /**
+   * Where the "Don't see what you're looking for?" form posts. Formspree
+   * emails each submission to the address the account was created with.
+   * Set to null to remove the form and fall back to the call/text buttons.
+   * If this ever changes provider, the privacy policy names Formspree.
+   */
+  formspreeEndpoint: 'https://formspree.io/f/xzeznpyq' as string | null,
   address: {
     street: '3210 S I-35 Frontage Rd',
     city: 'Austin',
